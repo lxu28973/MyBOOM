@@ -57,7 +57,7 @@ class RegisterRead(
     val pred_bypass = Input(Vec(numTotalPredBypassPorts, Valid(new ExeUnitResp(1))))
 
     // send micro-ops to the execution pipelines
-    val exe_reqs = Vec(issueWidth, (new DecoupledIO(new FuncUnitReq(registerWidth))))
+    val exe_reqs = Vec(issueWidth, (new DecoupledIO(new FuncUnitReq(registerWidth))))   // have not used the ready signals
 
     val kill   = Input(Bool())
     val brupdate = Input(new BrUpdateInfo())
@@ -76,7 +76,7 @@ class RegisterRead(
   //-------------------------------------------------------------
   // hook up inputs
 
-  for (w <- 0 until issueWidth) {
+  for (w <- 0 until issueWidth) {   // instruction decode to generate uop.ctrl
     val rrd_decode_unit = Module(new RegisterReadDecode(supportedUnitsArray(w)))
     rrd_decode_unit.io.iss_valid := io.iss_valids(w)
     rrd_decode_unit.io.iss_uop   := io.iss_uops(w)
@@ -161,7 +161,7 @@ class RegisterRead(
     var pred_cases = Array((false.B, 0.U(1.W)))
 
     val prs1       = rrd_uops(w).prs1
-    val lrs1_rtype = rrd_uops(w).lrs1_rtype
+    val lrs1_rtype = rrd_uops(w).lrs1_rtype // logic register type
     val prs2       = rrd_uops(w).prs2
     val lrs2_rtype = rrd_uops(w).lrs2_rtype
     val ppred      = rrd_uops(w).ppred

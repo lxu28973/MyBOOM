@@ -65,15 +65,15 @@ class IssueUnitCollapsing(
 
   val uops = issue_slots.map(s=>s.out_uop) ++ dis_uops.map(s=>s)
   for (i <- 0 until numIssueSlots) {
-    issue_slots(i).in_uop.valid := false.B
+    issue_slots(i).in_uop.valid := false.B    // default is not move to here
     issue_slots(i).in_uop.bits  := uops(i+1)
     for (j <- 1 to maxShift by 1) {
-      when (shamts_oh(i+j) === (1 << (j-1)).U) {
+      when (shamts_oh(i+j) === (1 << (j-1)).U) {    // is this slot data move to here
         issue_slots(i).in_uop.valid := will_be_valid(i+j)
         issue_slots(i).in_uop.bits  := uops(i+j)
       }
     }
-    issue_slots(i).clear        := shamts_oh(i) =/= 0.U
+    issue_slots(i).clear        := shamts_oh(i) =/= 0.U   // has slot data move to here
   }
 
   //-------------------------------------------------------------
@@ -103,14 +103,14 @@ class IssueUnitCollapsing(
   }
 
   val requests = issue_slots.map(s => s.request)
-  val port_issued = Array.fill(issueWidth){Bool()}
+  val port_issued = Array.fill(issueWidth){Bool()}    // CAUTION: Arrays are mutable
   for (w <- 0 until issueWidth) {
     port_issued(w) = false.B
   }
 
-  for (i <- 0 until numIssueSlots) {
+  for (i <- 0 until numIssueSlots) {    // allow issue queue have internal vacant
     issue_slots(i).grant := false.B
-    var uop_issued = false.B
+    var uop_issued = false.B    // CAUTION: var, uop_issued = a | uop_issued, first uop_issued and second uop_issued are not the same
 
     for (w <- 0 until issueWidth) {
       val can_allocate = (issue_slots(i).uop.fu_code & io.fu_types(w)) =/= 0.U

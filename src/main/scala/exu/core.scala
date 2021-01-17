@@ -825,11 +825,11 @@ class BoomCore(implicit p: Parameters) extends BoomModule
                                 !resp.bits.uop.bypassable &&
                                 resp.bits.uop.dst_rtype === RT_FIX
 
-      if (exe_units(i).bypassable) {
+      if (exe_units(i).bypassable) {  // can bypass, but maybe invalid sometimes
         int_iss_wakeups(iss_wu_idx) := fast_wakeup
         iss_wu_idx += 1
       }
-      if (!exe_units(i).alwaysBypassable) {
+      if (!exe_units(i).alwaysBypassable) { //  also need slow_wakeup if not always bypassable
         int_iss_wakeups(iss_wu_idx) := slow_wakeup
         iss_wu_idx += 1
       }

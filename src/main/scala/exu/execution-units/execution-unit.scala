@@ -252,7 +252,7 @@ class ALUExeUnit(
                  Mux(hasCSR.B, FU_CSR, 0.U) |
                  Mux(hasJmpUnit.B, FU_JMP, 0.U) |
                  Mux(!ifpu_busy && hasIfpu.B, FU_I2F, 0.U) |
-                 Mux(hasMem.B, FU_MEM, 0.U)
+                 Mux(hasMem.B, FU_MEM, 0.U)   // every function stood by one bit, if that bit is asserted means has that function
 
   // ALU Unit -------------------------------
   var alu: ALUUnit = null

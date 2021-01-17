@@ -36,7 +36,7 @@ class MicroOp(implicit p: Parameters) extends BoomBundle
   val uopc             = UInt(UOPC_SZ.W)       // micro-op code
   val inst             = UInt(32.W)
   val debug_inst       = UInt(32.W)
-  val is_rvc           = Bool()
+  val is_rvc           = Bool()               // is RISC-V C extension instruction?
   val debug_pc         = UInt(coreMaxAddrBits.W)
   val iq_type          = UInt(IQT_SZ.W)        // which issue unit do we use?
   val fu_code          = UInt(FUConstants.FUC_SZ.W) // which functional unit do we use?
