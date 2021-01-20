@@ -32,7 +32,8 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   //*******************************
   // Instantiate the ExecutionUnits
 
-  private val exe_units = ArrayBuffer[ExecutionUnit]()
+  private val exe_units = ArrayBuffer[ExecutionUnit]()    // private make this is only used in this file,
+                                                          // maybe a good way to make another exe_unit sort
 
   //*******************************
   // Act like a collection
