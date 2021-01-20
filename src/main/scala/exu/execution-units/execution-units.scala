@@ -35,6 +35,8 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   private val exe_units = ArrayBuffer[ExecutionUnit]()    // private make this is only used in this file,
                                                           // maybe a good way to make another exe_unit sort
 
+  private val multi_port_units = ArrayBuffer[MultiPortExeUnit]()
+
   //*******************************
   // Act like a collection
 
@@ -65,6 +67,18 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   def count(f: ExecutionUnit => Boolean) = {
     exe_units.count(f)
   }
+
+  // for multi port unit start
+  def mplength = multi_port_units.length
+
+  def mpforeach[U](f: MultiPortExeUnit => U) = {
+    multi_port_units.foreach(f)
+  }
+
+  def mpcount(f: MultiPortExeUnit => Boolean) = {
+    multi_port_units.count(f)
+  }
+  // multi port end
 
   lazy val memory_units = {
     exe_units.filter(_.hasMem)
@@ -121,11 +135,15 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
         hasJmpUnit     = is_nth(0),
         hasCSR         = is_nth(1),
         hasRocc        = is_nth(1) && usingRoCC,
-        hasMul         = is_nth(2),
+//        hasMul         = is_nth(2),
         hasDiv         = is_nth(3),
         hasIfpu        = is_nth(4) && usingFPU))
       exe_units += alu_exe_unit
     }
+
+    val mul_exe_unit = Module(new MulExeUnit(0,4,4))
+    multi_port_units += mul_exe_unit
+
   } else {
     val fp_width = issueParams.find(_.iqType == IQT_FP.litValue).get.issueWidth
     for (w <- 0 until fp_width) {
@@ -156,16 +174,16 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   if (!fpu) {
     // if this is for FPU units, we don't need a memory unit (or other integer units).
     require (exe_units.map(_.hasMem).reduce(_|_), "Datapath is missing a memory unit.")
-    require (exe_units.map(_.hasMul).reduce(_|_), "Datapath is missing a multiplier.")
+//    require (exe_units.map(_.hasMul).reduce(_|_), "Datapath is missing a multiplier.")
     require (exe_units.map(_.hasDiv).reduce(_|_), "Datapath is missing a divider.")
   } else {
     require (exe_units.map(_.hasFpu).reduce(_|_),
       "Datapath is missing a fpu (or has an fpu and shouldnt).")
   }
 
-  val numIrfReaders       = exe_units.count(_.readsIrf)
-  val numIrfReadPorts     = exe_units.count(_.readsIrf) * 2
-  val numIrfWritePorts    = exe_units.count(_.writesIrf)
+  val numIrfReaders       = exe_units.count(_.readsIrf) + multi_port_units.map(_.numReadPort).sum
+  val numIrfReadPorts     = exe_units.count(_.readsIrf) * 2 + multi_port_units.map(_.numReadPort).sum * 2
+  val numIrfWritePorts    = exe_units.count(_.writesIrf) + multi_port_units.map(_.numWritePort).sum
   val numLlIrfWritePorts  = exe_units.count(_.writesLlIrf)
   val numTotalBypassPorts = exe_units.withFilter(_.bypassable).map(_.numBypassStages).foldLeft(0)(_+_)
 
