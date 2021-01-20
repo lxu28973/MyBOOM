@@ -19,13 +19,11 @@ class MultiPortExeUnitIOr(val dataWidth: Int)(implicit p: Parameters) extends Bo
   val brupdate = Input(new BrUpdateInfo())
 }
 
-class MultiPortExeUnitIOw(val numBypassStages: Int, val dataWidth: Int)(implicit p: Parameters) extends BoomBundle {
+class MultiPortExeUnitIOw(val dataWidth: Int)(implicit p: Parameters) extends BoomBundle {
   val iresp = new DecoupledIO(new ExeUnitResp(dataWidth))
-  val bypass = Output(Vec(numBypassStages, Valid(new ExeUnitResp(dataWidth))))
 }
 
 class MultiPortExeUnit(
-                  val numBypassStages: Int,
                   val dataWidth: Int,
                   val numReadPort: Int,
                   val numWritePort: Int
@@ -33,7 +31,7 @@ class MultiPortExeUnit(
 {
   val io = IO(new Bundle() {
     val rp = Vec(numReadPort, new MultiPortExeUnitIOr(dataWidth))
-    val wp = Vec(numWritePort, new MultiPortExeUnitIOw(numBypassStages, dataWidth))
+    val wp = Vec(numWritePort, new MultiPortExeUnitIOw(dataWidth))
   })
   
   for (i <- 0 until numWritePort){
@@ -61,12 +59,10 @@ class MultiPortExeUnit(
 
 // First use pipelined iMul to verify can add to BOOM
 class MulExeUnit(
-                  numBypassStages: Int = 0,
                   numReadPort: Int = 4,
                   numWritePort: Int = 6
                 )(implicit p: Parameters)
   extends MultiPortExeUnit(
-    numBypassStages,
     p(tile.XLen) + 1,
     numReadPort,
     numWritePort

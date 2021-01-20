@@ -71,6 +71,8 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   // for multi port unit start
   def mplength = multi_port_units.length
 
+  def mpapply(n: Int) = multi_port_units(n)
+
   def mpforeach[U](f: MultiPortExeUnit => U) = {
     multi_port_units.foreach(f)
   }
@@ -141,7 +143,7 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
       exe_units += alu_exe_unit
     }
 
-    val mul_exe_unit = Module(new MulExeUnit(0,4,4))
+    val mul_exe_unit = Module(new MulExeUnit(4, 4))
     multi_port_units += mul_exe_unit
 
   } else {

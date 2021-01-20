@@ -844,6 +844,33 @@ class BoomCore(implicit p: Parameters) extends BoomModule
       }
     }
   }
+
+  for (i <- 0 until exe_units.mplength) {
+    if (exe_units.mpapply(i).numWritePort != 0) {
+      for (j <- 0 until exe_units.mpapply(i).numWritePort) {
+        val slow_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
+        slow_wakeup := DontCare
+
+        val resp = exe_units.mpapply(i).io.wp(j).iresp
+        assert(!(resp.valid && resp.bits.uop.rf_wen && resp.bits.uop.dst_rtype =/= RT_FIX))
+
+
+        // Slow Wakeup (uses write-port to register file)
+        slow_wakeup.bits.uop := resp.bits.uop
+        slow_wakeup.valid := resp.valid &&
+          resp.bits.uop.rf_wen &&
+          !resp.bits.uop.bypassable &&
+          resp.bits.uop.dst_rtype === RT_FIX
+
+        int_iss_wakeups(iss_wu_idx) := slow_wakeup
+        iss_wu_idx += 1
+
+        int_ren_wakeups(ren_wu_idx) := slow_wakeup
+        ren_wu_idx += 1
+      }
+    }
+  }
+
   require (iss_wu_idx == numIntIssueWakeupPorts)
   require (ren_wu_idx == numIntRenameWakeupPorts)
   require (iss_wu_idx == ren_wu_idx)
@@ -1167,6 +1194,38 @@ class BoomCore(implicit p: Parameters) extends BoomModule
       w_cnt += 1
     }
   }
+
+  for (i <- 0 until exe_units.mplength) {
+    if (exe_units.mpapply(i).numWritePort != 0) {
+      for (j <- 0 until exe_units.mpapply(i).numWritePort) {
+        val wbresp = exe_units.mpapply(i).io.wp(j).iresp
+        val wbpdst = wbresp.bits.uop.pdst
+        val wbdata = wbresp.bits.data
+
+        def wbIsValid(rtype: UInt) =
+          wbresp.valid && wbresp.bits.uop.rf_wen && wbresp.bits.uop.dst_rtype === rtype
+
+        iregfile.io.write_ports(w_cnt).valid := wbIsValid(RT_FIX)
+        iregfile.io.write_ports(w_cnt).bits.addr := wbpdst
+        wbresp.ready := true.B
+        iregfile.io.write_ports(w_cnt).bits.data := wbdata
+
+        assert(!wbIsValid(RT_FLT), "[fppipeline] An FP writeback is being attempted to the Int Regfile.")
+
+        assert(!(wbresp.valid &&
+          !wbresp.bits.uop.rf_wen &&
+          wbresp.bits.uop.dst_rtype === RT_FIX),
+          "[fppipeline] An Int writeback is being attempted with rf_wen disabled.")
+
+        assert(!(wbresp.valid &&
+          wbresp.bits.uop.rf_wen &&
+          wbresp.bits.uop.dst_rtype =/= RT_FIX),
+          "[fppipeline] writeback being attempted to Int RF with dst != Int type exe_units(" + i + ").iresp")
+        w_cnt += 1
+      }
+    }
+  }
+
   require(w_cnt == iregfile.io.write_ports.length)
 
   if (enableSFBOpt) {
@@ -1236,6 +1295,24 @@ class BoomCore(implicit p: Parameters) extends BoomModule
       cnt += 1
     }
   }
+
+  exe_units.mpforeach(eu => {
+    if (eu.numWritePort != 0)
+    {
+      for (j <- 0 until eu.numWritePort) {
+        val resp = eu.io.wp(j).iresp
+        val wb_uop = resp.bits.uop
+        val data = resp.bits.data
+
+        rob.io.wb_resps(cnt).valid := resp.valid && !(wb_uop.uses_stq && !wb_uop.is_amo)
+        rob.io.wb_resps(cnt).bits <> resp.bits
+        rob.io.debug_wb_valids(cnt) := resp.valid && wb_uop.rf_wen && wb_uop.dst_rtype === RT_FIX
+        rob.io.debug_wb_wdata(cnt) := data
+
+        cnt += 1
+      }
+    }
+  })
 
   require(cnt == numIrfWritePorts)
   if (usingFPU) {
