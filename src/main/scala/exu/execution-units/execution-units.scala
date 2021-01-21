@@ -80,6 +80,10 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   def mpcount(f: MultiPortExeUnit => Boolean) = {
     multi_port_units.count(f)
   }
+
+  def mpwithFilter(f: MultiPortExeUnit => Boolean) = {
+    multi_port_units.withFilter(f)
+  }
   // multi port end
 
   lazy val memory_units = {

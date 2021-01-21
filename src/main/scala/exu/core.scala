@@ -130,11 +130,22 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   val ll_wbarb         = Module(new Arbiter(new ExeUnitResp(xLen), 1 +
                                                                    (if (usingFPU) 1 else 0) +
                                                                    (if (usingRoCC) 1 else 0)))
+
+  val mpsupportedFuncUnits = {
+    for (i <- 0 until exe_units.mplength)
+      yield Seq.fill(exe_units.mpapply(i).numReadPort)(exe_units.mpapply(i).supportedFuncUnits)
+  }.flatten.toSeq
+
+  val mpnumReadPortsArray = {
+    for (i <- 0 until exe_units.mplength)
+      yield Seq.fill(exe_units.mpapply(i).numReadPort)(2)
+  }.flatten.toSeq
+
   val iregister_read   = Module(new RegisterRead(
                            issue_units.map(_.issueWidth).sum,
-                           exe_units.withFilter(_.readsIrf).map(_.supportedFuncUnits),
+                           exe_units.withFilter(_.readsIrf).map(_.supportedFuncUnits) ++ mpsupportedFuncUnits,
                            numIrfReadPorts,
-                           exe_units.withFilter(_.readsIrf).map(x => 2),
+                           exe_units.withFilter(_.readsIrf).map(x => 2) ++ mpnumReadPortsArray,
                            exe_units.numTotalBypassPorts,
                            jmp_unit.numBypassStages,
                            xLen))
@@ -1106,6 +1117,15 @@ class BoomCore(implicit p: Parameters) extends BoomModule
         }
       }
       iss_idx += 1
+    }
+  }
+  for (w <- 0 until exe_units.mplength) {
+    val exe_unit = exe_units.mpapply(w)
+    if (exe_unit.numReadPort != 0) {
+      for (j <- 0 until exe_unit.numReadPort) {
+        exe_unit.io.rp(j).req <> iregister_read.io.exe_reqs(iss_idx)
+        iss_idx += 1
+      }
     }
   }
   require (bypass_idx == exe_units.numTotalBypassPorts)

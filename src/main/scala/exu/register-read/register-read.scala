@@ -104,7 +104,7 @@ class RegisterRead(
 
   var idx = 0 // index into flattened read_ports array
   for (w <- 0 until issueWidth) {
-    val numReadPorts = numReadPortsArray(w)
+    val numReadPorts = numReadPortsArray(w)   // only use the first w entry???????
 
     // NOTE:
     // rrdLatency==1, we need to send read address at end of ISS stage,
