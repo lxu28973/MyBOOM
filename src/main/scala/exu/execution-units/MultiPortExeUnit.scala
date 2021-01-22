@@ -57,10 +57,26 @@ class MultiPortExeUnit(
   }
 }
 
-// First use pipelined iMul to verify can add to BOOM
 class MulExeUnit(
+                numReadPort: Int = 4,
+                numWritePort: Int = 6
+                )(implicit p: Parameters)
+  extends MultiPortExeUnit(
+    p(tile.XLen) + 1,
+    numReadPort,
+    numWritePort
+  )
+{
+
+}
+
+
+
+
+// First use pipelined iMul to verify can add to BOOM
+class MulExeUnitForTest(
                   numReadPort: Int = 4,
-                  numWritePort: Int = 6
+                  numWritePort: Int = 4
                 )(implicit p: Parameters)
   extends MultiPortExeUnit(
     p(tile.XLen) + 1,

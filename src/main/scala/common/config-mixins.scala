@@ -325,7 +325,7 @@ class WithMy6WideBooms extends Config((site, here, up) => {
       numLdqEntries = 32,
       numStqEntries = 32,
       maxBrCount = 20,
-      numFetchBufferEntries = 35,
+      numFetchBufferEntries = 36,
       enablePrefetching=true,
       numDCacheBanks=1, // Duplicate the DCache. For Science
       ftq = FtqParameters(nEntries=40),

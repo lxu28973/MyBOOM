@@ -32,10 +32,9 @@ class MulIssueSlotIO()(implicit p: Parameters) extends BoomBundle
 class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   val io = IO(new MulIssueSlotIO)
 
-  val s_invalid :: s_valid_1 :: Nil = Enum(2)
+  val s_invalid :: s_valid_1 :: s_valid_2 :: s_valid_3 :: s_valid_4 :: Nil = Enum(5)
   // slot invalid?
   // slot is valid, holding 1 uop
-  // slot is valid, holds 2 uops (like a store)
   def is_invalid = state === s_invalid
   def is_valid = state =/= s_invalid
 
@@ -43,6 +42,11 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   val next_uopc       = Wire(UInt()) // the next uopc of this slot (which might then get moved to a new slot)
 
   val state = RegInit(s_invalid)
+
+  val tag = RegInit(0.U(2.W))
+  val data = RegInit(VecInit(Seq.fill(4)(0.U(33.W))))
+  val request = RegInit(0.U(4.W))
+  val pattern = RegInit(0.U(2.W))
 
   val slot_uop = RegInit(NullMicroOp)
   val next_uop = Mux(io.in_uop.valid, io.in_uop.bits, slot_uop)
@@ -55,7 +59,7 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   when (io.kill) {
     state := s_invalid
   } .elsewhen (io.in_uop.valid) {
-//    state := io.in_uop.bits.iw_state
+    state := io.in_uop.bits.iw_state  // need to initialized in issue unit
   } .elsewhen (io.clear) {
     state := s_invalid
   } .otherwise {
