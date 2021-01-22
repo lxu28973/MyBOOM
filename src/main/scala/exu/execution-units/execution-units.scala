@@ -122,8 +122,16 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
     exe_units.find(_.hasRocc).get
   }
 
+  val useMultiPorts = true  // TODO: now control use MultiPortsUnits or not here, maybe can add it to Param later
+
   if (!fpu) {
-    val int_width = issueParams.find(_.iqType == IQT_INT.litValue).get.issueWidth - 4   // TODO: need to change int_width manually every time, how to auto get it?
+
+    if(useMultiPorts) {
+      val mul_exe_unit = Module(new MulExeUnit(4, 4))
+      multi_port_units += mul_exe_unit
+    }
+
+    val int_width = issueParams.find(_.iqType == IQT_INT.litValue).get.issueWidth - multi_port_units.map(_.numReadPort).sum
 //    println("int_width: " + int_width)
 //    println("issueWidth: " + issueParams.find(_.iqType == IQT_INT.litValue).get.issueWidth)
 //    println("numReadPort: " + multi_port_units.map(_.numReadPort).sum)
@@ -144,15 +152,12 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
         hasJmpUnit     = is_nth(0),
         hasCSR         = is_nth(1),
         hasRocc        = is_nth(1) && usingRoCC,
-//        hasMul         = is_nth(2),
+        hasMul         = if(useMultiPorts) false else is_nth(2),
         hasDiv         = is_nth(3),
         hasIfpu        = is_nth(4) && usingFPU))
       exe_units += alu_exe_unit
       println("int_exe_unit" + w)
     }
-
-    val mul_exe_unit = Module(new MulExeUnit(4, 4))
-    multi_port_units += mul_exe_unit
 
   } else {
     val fp_width = issueParams.find(_.iqType == IQT_FP.litValue).get.issueWidth
@@ -184,7 +189,7 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   if (!fpu) {
     // if this is for FPU units, we don't need a memory unit (or other integer units).
     require (exe_units.map(_.hasMem).reduce(_|_), "Datapath is missing a memory unit.")
-//    require (exe_units.map(_.hasMul).reduce(_|_), "Datapath is missing a multiplier.")
+    if (!useMultiPorts) require (exe_units.map(_.hasMul).reduce(_|_), "Datapath is missing a multiplier.")
     require (exe_units.map(_.hasDiv).reduce(_|_), "Datapath is missing a divider.")
   } else {
     require (exe_units.map(_.hasFpu).reduce(_|_),
