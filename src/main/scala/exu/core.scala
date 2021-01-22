@@ -157,7 +157,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   val int_ren_wakeups  = Wire(Vec(numIntRenameWakeupPorts, Valid(new ExeUnitResp(xLen))))
   val pred_wakeup  = Wire(Valid(new ExeUnitResp(1)))
 
-  require (exe_units.length == issue_units.map(_.issueWidth).sum)
+  require (exe_units.length + exe_units.mpwithFilter(_.numReadPort != 0).map(_.numReadPort).sum == issue_units.map(_.issueWidth).sum)
 
   //***********************************
   // Pipeline State Registers and Wires
@@ -238,6 +238,11 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   for (eu <- exe_units) {
     eu.io.brupdate := brupdate
   }
+
+  exe_units.mpforeach(eu => {
+    for (j <- 0 until eu.numReadPort)
+      eu.io.rp(j).brupdate := brupdate
+  })
 
   if (usingFPU) {
     fp_pipeline.io.brupdate := brupdate
@@ -789,7 +794,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   //-------------------------------------------------------------
   //-------------------------------------------------------------
 
-  require (issue_units.map(_.issueWidth).sum == exe_units.length)
+  require (issue_units.map(_.issueWidth).sum == exe_units.length + exe_units.mpwithFilter(_.numReadPort != 0).map(_.numReadPort).sum)
 
   var iss_wu_idx = 1
   var ren_wu_idx = 1
@@ -968,6 +973,28 @@ class BoomCore(implicit p: Parameters) extends BoomModule
         int_iss_cnt += 1
       }
       iss_idx += 1
+    }
+  }
+  for (w <- 0 until exe_units.mplength) {
+    for (j <- 0 until exe_units.mpapply(w).numReadPort) {
+      var fu_types = exe_units.mpapply(w).io.rp(j).fu_types
+      val exe_unit = exe_units.mpapply(w)
+      if (exe_unit.numReadPort != 0) {
+        if (exe_unit.supportedFuncUnits.muld) {
+          // Supress just-issued divides from issuing back-to-back, since it's an iterative divider.
+          // But it takes a cycle to get to the Exe stage, so it can't tell us it is busy yet.
+          val idiv_issued = iss_valids(iss_idx) && iss_uops(iss_idx).fu_code_is(FU_DIV)
+          fu_types = fu_types & RegNext(~Mux(idiv_issued, FU_DIV, 0.U))
+        }
+        println("int_iss_cnt: " + int_iss_cnt)
+        println("issueWidth: " + int_iss_unit.io.iss_valids.length)
+        iss_valids(iss_idx) := int_iss_unit.io.iss_valids(int_iss_cnt)
+        iss_uops(iss_idx) := int_iss_unit.io.iss_uops(int_iss_cnt)
+        int_iss_unit.io.fu_types(int_iss_cnt) := fu_types
+        int_iss_cnt += 1
+
+        iss_idx += 1
+      }
     }
   }
   require(iss_idx == exe_units.numIrfReaders)

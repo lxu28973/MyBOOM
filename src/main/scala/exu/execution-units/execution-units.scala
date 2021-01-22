@@ -123,7 +123,10 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   }
 
   if (!fpu) {
-    val int_width = issueParams.find(_.iqType == IQT_INT.litValue).get.issueWidth
+    val int_width = issueParams.find(_.iqType == IQT_INT.litValue).get.issueWidth - 4   // TODO: need to change int_width manually every time, how to auto get it?
+//    println("int_width: " + int_width)
+//    println("issueWidth: " + issueParams.find(_.iqType == IQT_INT.litValue).get.issueWidth)
+//    println("numReadPort: " + multi_port_units.map(_.numReadPort).sum)
 
     for (w <- 0 until memWidth) {
       val memExeUnit = Module(new ALUExeUnit(
@@ -145,6 +148,7 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
         hasDiv         = is_nth(3),
         hasIfpu        = is_nth(4) && usingFPU))
       exe_units += alu_exe_unit
+      println("int_exe_unit" + w)
     }
 
     val mul_exe_unit = Module(new MulExeUnit(4, 4))
@@ -200,5 +204,5 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
 
   // The mem-unit will also bypass writes to readers in the RRD stage.
   // NOTE: This does NOT include the ll_wport
-  val bypassable_write_port_mask = exe_units.withFilter(x => x.writesIrf).map(u => u.bypassable)
+  val bypassable_write_port_mask = exe_units.withFilter(x => x.writesIrf).map(u => u.bypassable) ++ multi_port_units.map(u => Seq.fill(u.numWritePort)(false)).flatten
 }

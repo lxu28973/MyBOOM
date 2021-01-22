@@ -307,6 +307,38 @@ class WithGigaBooms extends Config((site, here, up) => {
   case MaxHartIdBits => log2Up(site(BoomTilesKey).size)
 })
 
+/**
+  * 8-wide BOOM.
+  */
+class WithMyMegaBooms extends Config((site, here, up) => {
+  case BoomTilesKey => up(BoomTilesKey, site) map { b => b.copy(
+    core = b.core.copy(
+      fetchWidth = 8,
+      decodeWidth = 8,
+      numRobEntries = 160,
+      issueParams = Seq(
+        IssueParams(issueWidth=2, numEntries=24, iqType=IQT_MEM.litValue, dispatchWidth=8),
+        IssueParams(issueWidth=8, numEntries=50, iqType=IQT_INT.litValue, dispatchWidth=8),
+        IssueParams(issueWidth=2, numEntries=32, iqType=IQT_FP.litValue , dispatchWidth=8)),
+      numIntPhysRegisters = 128,
+      numFpPhysRegisters = 128,
+      numLdqEntries = 32,
+      numStqEntries = 32,
+      maxBrCount = 20,
+      numFetchBufferEntries = 32,
+      enablePrefetching=true,
+      numDCacheBanks=2,
+      ftq = FtqParameters(nEntries=40),
+      fpu = Some(freechips.rocketchip.tile.FPUParams(sfmaLatency=4, dfmaLatency=4, divSqrt=true))),
+    dcache = Some(DCacheParams(rowBits = site(SystemBusKey).beatBytes*8,
+      nSets=64, nWays=8, nMSHRs=8, nTLBEntries=32)),
+    icache = Some(ICacheParams(fetchBytes = 4*4, rowBits = site(SystemBusKey).beatBytes*8, nSets=64, nWays=8, prefetch=true))
+  )}
+  case SystemBusKey => up(SystemBusKey, site).copy(beatBytes = 16)
+  case XLen => 64
+  case MaxHartIdBits => log2Up(site(BoomTilesKey).size)
+})
+
 
 /**
   * BOOM Configs for CS152 lab

@@ -135,7 +135,8 @@ class RegisterFileSynthesizable(
   // But since these bypasses are expensive, and not all write ports need to bypass their data,
   // only perform the w->r bypass on a select number of write ports.
 
-  require (bypassableArray.length == io.write_ports.length)
+  require (bypassableArray.length == io.write_ports.length,
+    "bypassableArray.length: " + bypassableArray.length + "     io.write_ports.length: " + io.write_ports.length)
 
   if (bypassableArray.reduce(_||_)) {
     val bypassable_wports = ArrayBuffer[Valid[RegisterFileWritePort]]()
