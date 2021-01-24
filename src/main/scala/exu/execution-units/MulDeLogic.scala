@@ -13,14 +13,14 @@ import boom.ifu.GetPCFromFtqIO
 import boom.util.{BoomCoreStringPrefix, BranchKillableQueue, GetNewBrMask, ImmGen, IsKilledByBranch}
 import freechips.rocketchip.rocket.ALU.{FN_MUL, FN_MULH, FN_MULHSU, FN_MULHU}
 
-class MulDecodeOut extends Bundle {
+class MulDecodeIO extends Bundle {
   val cmdHi = Bool()
   val lhsSigned = Bool()
   val rhsSigned = Bool()
   val cmdHalf = Bool()
 }
 
-class MulZeroDetectOut extends Bundle {
+class MulZeroDetectIO extends Bundle {
   val request = UInt(4.W)
   val resZero = Bool()
   val pattern = UInt(2.W)
@@ -30,8 +30,8 @@ class MulZeroDetectOut extends Bundle {
 class MulDeLogic(numReadPort: Int, dataWidth: Int)(implicit p: Parameters) extends BoomModule{
   val io = IO(new Bundle{
     val rp = Vec(numReadPort, new MultiPortExeUnitIOr(dataWidth))
-    val decOut = Vec(numReadPort, Output(new MulDecodeOut))
-    val zeroDetectOut = Vec(numReadPort, Output(new MulZeroDetectOut))
+    val decOut = Vec(numReadPort, Output(new MulDecodeIO))
+    val zeroDetectOut = Vec(numReadPort, Output(new MulZeroDetectIO))
   })
 
   for (j <- 0 until numReadPort) {

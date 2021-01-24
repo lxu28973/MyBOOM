@@ -51,6 +51,9 @@ class MicroOp(implicit p: Parameters) extends BoomBundle
   val iw_p1_poisoned   = Bool()
   val iw_p2_poisoned   = Bool()
 
+  // For low precision Mul
+  val muliw_state      = UInt(1.W)
+
   val is_br            = Bool()                      // is this micro-op a (branch) vs a regular PC+4 inst?
   val is_jalr          = Bool()                      // is this a jump? (jal or jalr)
   val is_jal           = Bool()                      // is this a JAL (doesn't include JR)? used for branch unit
