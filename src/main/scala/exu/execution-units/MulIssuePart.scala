@@ -14,7 +14,7 @@ import boom.ifu.GetPCFromFtqIO
 import boom.util.{BoomCoreStringPrefix, BranchKillableQueue, GetNewBrMask, ImmGen, IsKilledByBranch}
 
 
-class MulIssuePartInBundle(dataWidth: Int)(implicit p: Parameters) extends BoomBundle
+class MulIssuePartInBundle(val dataWidth: Int)(implicit p: Parameters) extends BoomBundle
 {
   val valid = Input(Bool())
   val ready = Output(Bool())

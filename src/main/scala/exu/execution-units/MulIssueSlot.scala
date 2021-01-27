@@ -71,7 +71,7 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   val slot_contain = RegInit({
     val slot_init = Wire(new SlotContain)
     slot_init.tag := 0.U(2.W)
-    slot_init.data := VecInit(Seq.fill(4)(0.U(33.W)))
+    slot_init.data := VecInit(Seq.fill(4)(0.S(33.W)))
     slot_init.req := 0.U(4.W)
     slot_init.pattern := 0.U(2.W)
     slot_init.uop := NullMicroOp
@@ -108,8 +108,9 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
 
   val cnt_req = PopCount(slot_contain.req)
   val cnt_grant = PopCount(io.grant)
-  var next_req = WireInit(slot_contain.req)
-  val slot_packets = Vec(4, (new Packet))
+  val next_req = Wire(UInt(4.W))
+  next_req := slot_contain.req
+  val slot_packets = Wire(Vec(4, (new Packet)))
 
   def connectPacket(slot_packet: Packet, i: Int, j: Int, weight:Int) = {
     slot_packet.pattern := slot_contain.pattern
@@ -132,13 +133,15 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   } .elsewhen(cnt_grant =/= 0.U && (state === s_valid_1)){
     when(cnt_req === cnt_grant){
       next_state := s_invalid
-      next_req := 0.U
+      next_req := 0.U(4.W)
     }.elsewhen(cnt_req > cnt_grant) {
       next_state := s_valid_1
       next_req := slot_contain.req
       for (i <- 0 until 4) {
         when(io.grant(i) === 1.U){
-          next_req(i) := 0.U
+          val bools = VecInit(next_req.toBools)
+          bools(i) := false.B
+          next_req := bools.asUInt
         }
       }
     }

@@ -72,13 +72,15 @@ class MulExeUnit(
 
   val delogic = Module(new MulDeLogic(numReadPort, dataWidth))
 
-  delogic.io.rp := io.rp
+  delogic.io.rp <> io.rp
 
   for (i <- 0 until numReadPort){
     when(delogic.io.zeroDetectOut(i).resZero){
-      io.wp(i).iresp.valid := io.rp(i).req.valid
       io.wp(i).iresp.bits.data := 0.U
+      io.wp(i).iresp.valid := io.rp(i).req.valid && !IsKilledByBranch(io.rp(i).brupdate, io.rp(i).req.bits.uop)
+      io.wp(i).iresp.bits.predicated := false.B
       io.wp(i).iresp.bits.uop := io.rp(i).req.bits.uop
+      io.wp(i).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(i).brupdate, io.rp(i).req.bits.uop)
     }
   }
 
@@ -132,15 +134,21 @@ class MulExeUnit(
         add1.io.in2 := prodArray(i)(3) << 64.U
       }
       io.wp(8).iresp.bits.data := Mux(cmdhiArray(i), add1.io.out(2*dataWidth-1, dataWidth), add1.io.out(dataWidth-1, 0))
-      io.wp(8).iresp.valid := true.B
+      io.wp(8).iresp.bits.uop := uopArray(i)
+      io.wp(8).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, uopArray(i))
+      io.wp(8).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
       validArray(i) := 0.U
+      io.wp(i).iresp.bits.predicated := false.B
     }.elsewhen(patternArray(i) === 2.U && PopCount(validArray(i)) === 4.U){
       add2.io.in1 := Cat(prodArray(i)(3), prodArray(i)(0)).asSInt
       add2.io.in2 := prodArray(i)(1) << 32.U
       add2.io.in3 := prodArray(i)(2) << 32.U
       io.wp(9).iresp.bits.data := Mux(cmdhiArray(i), add2.io.out(2*dataWidth-1, dataWidth), add2.io.out(dataWidth-1, 0))
-      io.wp(9).iresp.valid := true.B
+      io.wp(9).iresp.bits.uop := uopArray(i)
+      io.wp(9).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, uopArray(i))
+      io.wp(9).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
       validArray(i) := 0.U
+      io.wp(i).iresp.bits.predicated := false.B
     }
   }
 
@@ -157,15 +165,17 @@ class MulExeUnit(
       }.otherwise{
         data := mul_res(i) << (dataWidth/2).U
       }
-      io.wp(i + numReadPort).iresp.valid := packet(i).valid
+      io.wp(i + numReadPort).iresp.valid := packet(i).valid && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
       io.wp(i + numReadPort).iresp.bits.uop := packet(i).bits.uop
+      io.wp(i + numReadPort).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(i).brupdate, packet(i).bits.uop)
       io.wp(i + numReadPort).iresp.bits.data := Mux(packet(i).bits.cmd_hi, data(2*dataWidth-1, dataWidth), Mux(packet(i).bits.cmd_half, data(dataWidth/2-1, 0).sextTo(dataWidth), data(dataWidth-1, 0)))
     }.otherwise{
       when(packet(i).valid){
         prodArray(packet(i).bits.tag)(packet(i).bits.weight) := mul_res(i)
-        validArray(packet(i).bits.tag)(packet(i).bits.weight) := packet(i).valid
+        validArray(packet(i).bits.tag)(packet(i).bits.weight) := packet(i).valid && !IsKilledByBranch(io.rp(i).brupdate, packet(i).bits.uop) && !io.rp(i).req.bits.kill
         patternArray(packet(i).bits.tag) := packet(i).bits.pattern
         uopArray(packet(i).bits.tag) := packet(i).bits.uop
+        uopArray(packet(i).bits.tag).br_mask := GetNewBrMask(io.rp(i).brupdate, packet(i).bits.uop)
         cmdhiArray(packet(i).bits.tag) := packet(i).bits.cmd_hi
       }
     }

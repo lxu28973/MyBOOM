@@ -64,19 +64,20 @@ class MulDeLogic(numReadPort: Int, dataWidth: Int)(implicit p: Parameters) exten
       io.zeroDetectOut(j).resZero := false.B
     }
 
-    val nonZero = Wire(UInt(4.W))
+    val nonZero = Wire(Vec(4, Bool()))
     nonZero(0) := Mux(in1(dataWidth/2-1, 0) === 0.U, 0.U, 1.U)
     nonZero(1) := Mux(in1(dataWidth-1, dataWidth/2) === 0.U, 0.U, 1.U)
     nonZero(2) := Mux(in2(dataWidth/2-1, 0) === 0.U, 0.U, 1.U)
     nonZero(3) := Mux(in2(dataWidth-1, dataWidth/2) === 0.U, 0.U, 1.U)
 
-    val genReq = List(
-      BitPat("b?1?1") -> BitPat("b???1"),
-      BitPat("b1??1") -> BitPat("b??1?"),
-      BitPat("b?11?") -> BitPat("b?1??"),
-      BitPat("b1?1?") -> BitPat("b1???")
-    )
-    io.zeroDetectOut(j).request := DecodeLogic(nonZero, BitPat("b????"), genReq)
+//    val genReq = List(
+//      BitPat("b?1?1") -> BitPat("b???1"),
+//      BitPat("b1??1") -> BitPat("b??1?"),
+//      BitPat("b?11?") -> BitPat("b?1??"),
+//      BitPat("b1?1?") -> BitPat("b1???")
+//    )
+//    io.zeroDetectOut(j).request := DecodeLogic(nonZero.asUInt, BitPat("b????"), genReq)
+    io.zeroDetectOut(j).request := Cat(nonZero(3) & nonZero(1), nonZero(2) & nonZero(1), nonZero(3) & nonZero(0), nonZero(2) & nonZero(0))
     when(cmdHalf){
       io.zeroDetectOut(j).request := "b0001".U
     }
