@@ -46,6 +46,8 @@ class MulDeLogic(numReadPort: Int, dataWidth: Int)(implicit p: Parameters) exten
     val cmdHi :: lhsSigned :: rhsSigned :: Nil =
       DecodeLogic(in.ctrl.op_fcn, List(X, X, X), decode).map(_.asBool)
     val cmdHalf = (dataWidth > 32).B && in.ctrl.fcn_dw === DW_32 // for MULW instruction
+//    when(cmdHalf){cmdHi := false.B}
+    assert(!(cmdHalf & cmdHi))
 
     io.decOut(j).cmdHalf := cmdHalf
     io.decOut(j).cmdHi := cmdHi
@@ -75,10 +77,14 @@ class MulDeLogic(numReadPort: Int, dataWidth: Int)(implicit p: Parameters) exten
       BitPat("b1?1?") -> BitPat("b1???")
     )
     io.zeroDetectOut(j).request := DecodeLogic(nonZero, BitPat("b????"), genReq)
+    when(cmdHalf){
+      io.zeroDetectOut(j).request := "b0001".U
+    }
 
-    var numReq = WireInit(0.U(1.W))
-    for (i <- 0 until(4))
-      numReq = io.zeroDetectOut(j).request(i) +& numReq
+//    var numReq = WireInit(0.U(1.W))
+//    for (i <- 0 until(4))
+//      numReq = io.zeroDetectOut(j).request(i) +& numReq
+    val numReq = PopCount(io.zeroDetectOut(j).request)
 
     when(numReq === 4.U){
       io.zeroDetectOut(j).pattern := 2.U

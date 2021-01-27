@@ -21,6 +21,8 @@ class SlotContain()(implicit  p: Parameters) extends BoomBundle
   val data = Vec(4, SInt(33.W))
   val req = UInt(4.W)
   val pattern = UInt(2.W)
+  val cmd_hi = Bool()
+  val cmd_half = Bool()
 }
 
 class Packet()(implicit p: Parameters) extends BoomBundle
@@ -31,6 +33,8 @@ class Packet()(implicit p: Parameters) extends BoomBundle
   val rs2_x = SInt(33.W)
   val weight = UInt(2.W)
   val pattern = UInt(2.W)
+  val cmd_hi = Bool()
+  val cmd_half = Bool()
 }
 
 class MulIssueSlotIO()(implicit p: Parameters) extends BoomBundle
@@ -71,6 +75,8 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
     slot_init.req := 0.U(4.W)
     slot_init.pattern := 0.U(2.W)
     slot_init.uop := NullMicroOp
+    slot_init.cmd_half := false.B
+    slot_init.cmd_hi := false.B
     slot_init
   })
 
@@ -112,6 +118,8 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
     slot_packet.rs2_x := slot_contain.data(j)
     slot_packet.weight := weight.U
     slot_packet.tag := slot_contain.tag
+    slot_packet.cmd_half := slot_contain.cmd_half
+    slot_packet.cmd_hi := slot_contain.cmd_hi
     require(i != j)
   }
   connectPacket(slot_packets(0), 0, 2, 0)

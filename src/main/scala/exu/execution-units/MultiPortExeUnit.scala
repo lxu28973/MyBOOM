@@ -12,6 +12,7 @@ import FUConstants._
 import boom.common._
 import boom.ifu.GetPCFromFtqIO
 import boom.util.{BoomCoreStringPrefix, BranchKillableQueue, GetNewBrMask, ImmGen, IsKilledByBranch}
+import freechips.rocketchip.util.UIntToAugmentedUInt
 
 class MultiPortExeUnitIOr(val dataWidth: Int)(implicit p: Parameters) extends BoomBundle {
   val fu_types = Output(Bits(FUC_SZ.W))
@@ -59,18 +60,137 @@ class MultiPortExeUnit(
 
 class MulExeUnit(
                 numReadPort: Int = 4,
-                numWritePort: Int = 6
+                numWritePort: Int = 10,
+                dataWidth: Int = 64
                 )(implicit p: Parameters)
   extends MultiPortExeUnit(
-    p(tile.XLen) + 1,
+    dataWidth,
     numReadPort,
     numWritePort
   )
 {
 
+  val delogic = Module(new MulDeLogic(numReadPort, dataWidth))
+
+  delogic.io.rp := io.rp
+
+  for (i <- 0 until numReadPort){
+    when(delogic.io.zeroDetectOut(i).resZero){
+      io.wp(i).iresp.valid := io.rp(i).req.valid
+      io.wp(i).iresp.bits.data := 0.U
+      io.wp(i).iresp.bits.uop := io.rp(i).req.bits.uop
+    }
+  }
+
+  val issuePart = Module(new MulIssuePart(numReadPort, dataWidth, 16))
+
+  for (i <- 0 until numReadPort) {
+    issuePart.io.in(i).valid := io.rp(i).req.valid & ~delogic.io.zeroDetectOut(i).resZero
+    issuePart.io.in(i).dec := delogic.io.decOut(i)
+    issuePart.io.in(i).zeroDetect := delogic.io.zeroDetectOut(i)
+    issuePart.io.in(i).rs1_data := io.rp(i).req.bits.rs1_data
+    issuePart.io.in(i).rs2_data := io.rp(i).req.bits.rs2_data
+    issuePart.io.in(i).uop := io.rp(i).req.bits.uop
+  }
+
+  issuePart.io.brupdate := io.rp(0).brupdate
+  issuePart.io.kill := io.rp(0).req.bits.kill
+
+  val packet = Vec(numReadPort, Valid(new Packet))
+  packet := issuePart.io.packet
+
+  val prodArray = RegInit(0.U asTypeOf Vec(3, Vec(4, SInt(64.W))))
+  val validArray = RegInit(0.U asTypeOf Vec(3, UInt(4.W)))
+  val patternArray = RegInit(0.U asTypeOf Vec(3, UInt(2.W)))
+  val uopArray = RegInit(VecInit(Seq.fill(3)(NullMicroOp)))
+  val cmdhiArray = RegInit(0.U asTypeOf Vec(3, Bool()))
+
+
+  // Add
+  val add1 = Module(new ADD1)
+  val add2 = Module(new ADD2)
+  // default
+  add1.io.in1 := DontCare
+  add1.io.in2 := DontCare
+  add2.io.in1 := DontCare
+  add2.io.in2 := DontCare
+  add2.io.in3 := DontCare
+
+  for (i <- 8 to 9) {
+    io.wp(i).iresp.bits.data := DontCare
+    io.wp(i).iresp.bits.uop := DontCare
+    io.wp(i).iresp.valid := false.B
+  }
+
+  for (i <- 2 to 0 by -1) {   // this is unnecessary, because at most only 2 entry will be issue
+    when(patternArray(i) === 1.U && PopCount(validArray(i)) === 2.U){
+      when(validArray(i) === "b0011".U){
+        add1.io.in1 := prodArray(i)(0)
+        add1.io.in2 := (prodArray(i)(1) << 32.U)
+      }.elsewhen(validArray(i) === "b1100".U){
+        add1.io.in1 := prodArray(i)(2) << 32.U
+        add1.io.in2 := prodArray(i)(3) << 64.U
+      }
+      io.wp(8).iresp.bits.data := Mux(cmdhiArray(i), add1.io.out(2*dataWidth-1, dataWidth), add1.io.out(dataWidth-1, 0))
+      io.wp(8).iresp.valid := true.B
+      validArray(i) := 0.U
+    }.elsewhen(patternArray(i) === 2.U && PopCount(validArray(i)) === 4.U){
+      add2.io.in1 := Cat(prodArray(i)(3), prodArray(i)(0)).asSInt
+      add2.io.in2 := prodArray(i)(1) << 32.U
+      add2.io.in3 := prodArray(i)(2) << 32.U
+      io.wp(9).iresp.bits.data := Mux(cmdhiArray(i), add2.io.out(2*dataWidth-1, dataWidth), add2.io.out(dataWidth-1, 0))
+      io.wp(9).iresp.valid := true.B
+      validArray(i) := 0.U
+    }
+  }
+
+  // Multiple
+  val mul_res = Vec(numReadPort, SInt(64.W))
+  for (i <- 0 until numReadPort) {
+    mul_res(i) := packet(i).bits.rs1_x * packet(i).bits.rs2_x
+    when(packet(i).bits.pattern === 0.U){
+      val data = Wire(SInt((2*dataWidth).W))
+      when(packet(i).bits.weight === 0.U) {
+        data := mul_res(i)
+      }.elsewhen(packet(i).bits.weight === 3.U){
+        data := mul_res(i) << dataWidth.U
+      }.otherwise{
+        data := mul_res(i) << (dataWidth/2).U
+      }
+      io.wp(i + numReadPort).iresp.valid := packet(i).valid
+      io.wp(i + numReadPort).iresp.bits.uop := packet(i).bits.uop
+      io.wp(i + numReadPort).iresp.bits.data := Mux(packet(i).bits.cmd_hi, data(2*dataWidth-1, dataWidth), Mux(packet(i).bits.cmd_half, data(dataWidth/2-1, 0).sextTo(dataWidth), data(dataWidth-1, 0)))
+    }.otherwise{
+      when(packet(i).valid){
+        prodArray(packet(i).bits.tag)(packet(i).bits.weight) := mul_res(i)
+        validArray(packet(i).bits.tag)(packet(i).bits.weight) := packet(i).valid
+        patternArray(packet(i).bits.tag) := packet(i).bits.pattern
+        uopArray(packet(i).bits.tag) := packet(i).bits.uop
+        cmdhiArray(packet(i).bits.tag) := packet(i).bits.cmd_hi
+      }
+    }
+  }
+
 }
 
+class ADD1 extends Module {
+  val io = IO(new Bundle() {
+    val in1 = SInt(128.W)
+    val in2 = SInt(128.W)
+    val out = SInt(128.W)
+  })
+  io.out := io.in1 + io.in2
+}
 
+class ADD2 extends Module {
+  val io = IO(new Bundle() {
+    val in1 = SInt(128.W)
+    val in2 = SInt(128.W)
+    val in3 = SInt(128.W)
+    val out = SInt(128.W)
+  })
+  io.out := io.in1 + io.in2 + io.in3
+}
 
 
 // First use pipelined iMul to verify can add to BOOM
