@@ -43,7 +43,7 @@ class MulIssueSlotIO()(implicit p: Parameters) extends BoomBundle
   val will_be_valid = Output(Bool()) // TODO code review, do we need this signal so explicitely?
   val request       = Output(Bool())  // TODO: the same to valid, can remove it
   val reqs          = Output(UInt(4.W))
-  val grant         = Input(UInt(4.W))
+  val grant         = Input(Vec(4, UInt(1.W)))
 
   val brupdate      = Input(new BrUpdateInfo())
   val kill          = Input(Bool()) // pipeline flush
@@ -51,7 +51,7 @@ class MulIssueSlotIO()(implicit p: Parameters) extends BoomBundle
 
   val in            = Flipped(Valid(new SlotContain())) // if valid, this WILL overwrite an entry!
   val out           = Output(new SlotContain()) // the updated slot uop; will be shifted upwards in a collasping queue.
-  val packet        = Vec(4, (new Packet())) // the current Slot's uop. Sent down the pipeline when issued.
+  val packet        = Output(Vec(4, (new Packet()))) // the current Slot's uop. Sent down the pipeline when issued.
 }
 
 class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
@@ -80,7 +80,7 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
     slot_init
   })
 
-  val next_contain = Mux(io.in.valid, io.in.bits, slot_contain)
+//  val next_contain = Mux(io.in.valid, io.in.bits, slot_contain)
 
   //-----------------------------------------------------------------------------
   // next slot state computation
@@ -107,9 +107,9 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   next_uopc := slot_contain.uop.uopc
 
   val cnt_req = PopCount(slot_contain.req)
-  val cnt_grant = PopCount(io.grant)
-  val next_req = Wire(UInt(4.W))
-  next_req := slot_contain.req
+  val cnt_grant = PopCount(io.grant.asUInt)
+  val next_req = Wire(Vec(4, UInt(1.W)))
+  next_req := slot_contain.req.asBools
   val slot_packets = Wire(Vec(4, (new Packet)))
 
   def connectPacket(slot_packet: Packet, i: Int, j: Int, weight:Int) = {
@@ -133,18 +133,17 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   } .elsewhen(cnt_grant =/= 0.U && (state === s_valid_1)){
     when(cnt_req === cnt_grant){
       next_state := s_invalid
-      next_req := 0.U(4.W)
+      next_req := 0.U(4.W).asBools
     }.elsewhen(cnt_req > cnt_grant) {
       next_state := s_valid_1
-      next_req := slot_contain.req
+      next_req := slot_contain.req.asBools
       for (i <- 0 until 4) {
         when(io.grant(i) === 1.U){
-          val bools = VecInit(next_req.toBools)
-          bools(i) := false.B
-          next_req := bools.asUInt
+          next_req(i) := false.B
         }
       }
     }
+    slot_contain.req := next_req.asUInt
   }
 
   when (io.in.valid) {

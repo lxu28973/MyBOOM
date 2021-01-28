@@ -48,6 +48,8 @@ class MulIssuePart(numReadPort: Int, dataWidth: Int, numIssueSlots: Int)(implici
     dis_contain(w).tag := io.in(w).zeroDetect.tag
     dis_contain(w).pattern := io.in(w).zeroDetect.pattern
     dis_contain(w).req := io.in(w).zeroDetect.request
+    dis_contain(w).cmd_hi := io.in(w).dec.cmdHi
+    dis_contain(w).cmd_half := io.in(w).dec.cmdHalf
     dis_contain(w).data(0) := Cat(0.U(1.W), io.in(w).rs1_data(dataWidth/2 - 1, 0)).asSInt
     dis_contain(w).data(1) := Cat(io.in(w).dec.lhsSigned && io.in(w).rs1_data(dataWidth-1), io.in(w).rs1_data(dataWidth-1, dataWidth/2)).asSInt
     dis_contain(w).data(2) := Cat(0.U(1.W), io.in(w).rs2_data(dataWidth/2 - 1, 0)).asSInt
@@ -134,8 +136,8 @@ class MulIssuePart(numReadPort: Int, dataWidth: Int, numIssueSlots: Int)(implici
     io.packet(w).bits.uop := NullMicroOp
     io.packet(w).bits.weight := 0.U
     io.packet(w).bits.tag := 0.U
-    io.packet(w).bits.rs1_x := 0.U
-    io.packet(w).bits.rs2_x := 0.U
+    io.packet(w).bits.rs1_x := 0.S
+    io.packet(w).bits.rs2_x := 0.S
     io.packet(w).bits.pattern := 0.U
   }
 

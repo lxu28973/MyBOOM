@@ -72,7 +72,13 @@ class MulExeUnit(
 
   val delogic = Module(new MulDeLogic(numReadPort, dataWidth))
 
-  delogic.io.rp <> io.rp
+  for (i <- 0 until numReadPort) {
+    delogic.io.rp(i).brupdate := io.rp(i).brupdate
+    delogic.io.rp(i).req.bits := io.rp(i).req.bits
+    delogic.io.rp(i).req.valid := io.rp(i).req.valid
+    io.rp(i).req.ready := delogic.io.rp(i).req.ready
+    io.rp(i).fu_types := delogic.io.rp(i).fu_types
+  }
 
   for (i <- 0 until numReadPort){
     when(delogic.io.zeroDetectOut(i).resZero){
@@ -98,11 +104,11 @@ class MulExeUnit(
   issuePart.io.brupdate := io.rp(0).brupdate
   issuePart.io.kill := io.rp(0).req.bits.kill
 
-  val packet = Vec(numReadPort, Valid(new Packet))
+  val packet = Wire(Vec(numReadPort, Valid(new Packet)))
   packet := issuePart.io.packet
 
   val prodArray = RegInit(0.U asTypeOf Vec(3, Vec(4, SInt(64.W))))
-  val validArray = RegInit(0.U asTypeOf Vec(3, UInt(4.W)))
+  val validArray = RegInit(0.U asTypeOf Vec(3, Vec(4, UInt(1.W))))
   val patternArray = RegInit(0.U asTypeOf Vec(3, UInt(2.W)))
   val uopArray = RegInit(VecInit(Seq.fill(3)(NullMicroOp)))
   val cmdhiArray = RegInit(0.U asTypeOf Vec(3, Bool()))
@@ -125,11 +131,11 @@ class MulExeUnit(
   }
 
   for (i <- 2 to 0 by -1) {   // this is unnecessary, because at most only 2 entry will be issue
-    when(patternArray(i) === 1.U && PopCount(validArray(i)) === 2.U){
-      when(validArray(i) === "b0011".U){
+    when(patternArray(i) === 1.U && PopCount(validArray(i).asUInt) === 2.U){
+      when(validArray(i).asUInt === "b0011".U){
         add1.io.in1 := prodArray(i)(0)
         add1.io.in2 := (prodArray(i)(1) << 32.U)
-      }.elsewhen(validArray(i) === "b1100".U){
+      }.elsewhen(validArray(i).asUInt === "b1100".U){
         add1.io.in1 := prodArray(i)(2) << 32.U
         add1.io.in2 := prodArray(i)(3) << 64.U
       }
@@ -137,9 +143,9 @@ class MulExeUnit(
       io.wp(8).iresp.bits.uop := uopArray(i)
       io.wp(8).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, uopArray(i))
       io.wp(8).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
-      validArray(i) := 0.U
+      validArray(i) := 0.U(4.W).asBools
       io.wp(i).iresp.bits.predicated := false.B
-    }.elsewhen(patternArray(i) === 2.U && PopCount(validArray(i)) === 4.U){
+    }.elsewhen(patternArray(i) === 2.U && PopCount(validArray(i).asUInt) === 4.U){
       add2.io.in1 := Cat(prodArray(i)(3), prodArray(i)(0)).asSInt
       add2.io.in2 := prodArray(i)(1) << 32.U
       add2.io.in3 := prodArray(i)(2) << 32.U
@@ -147,13 +153,13 @@ class MulExeUnit(
       io.wp(9).iresp.bits.uop := uopArray(i)
       io.wp(9).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, uopArray(i))
       io.wp(9).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
-      validArray(i) := 0.U
+      validArray(i) := 0.U(4.W).asBools
       io.wp(i).iresp.bits.predicated := false.B
     }
   }
 
   // Multiple
-  val mul_res = Vec(numReadPort, SInt(64.W))
+  val mul_res = Wire(Vec(numReadPort, SInt(64.W)))
   for (i <- 0 until numReadPort) {
     mul_res(i) := packet(i).bits.rs1_x * packet(i).bits.rs2_x
     when(packet(i).bits.pattern === 0.U){
@@ -165,7 +171,7 @@ class MulExeUnit(
       }.otherwise{
         data := mul_res(i) << (dataWidth/2).U
       }
-      io.wp(i + numReadPort).iresp.valid := packet(i).valid && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
+      io.wp(i + numReadPort).iresp.valid := packet(i).valid && !IsKilledByBranch(io.rp(0).brupdate, packet(i).bits.uop)
       io.wp(i + numReadPort).iresp.bits.uop := packet(i).bits.uop
       io.wp(i + numReadPort).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(i).brupdate, packet(i).bits.uop)
       io.wp(i + numReadPort).iresp.bits.data := Mux(packet(i).bits.cmd_hi, data(2*dataWidth-1, dataWidth), Mux(packet(i).bits.cmd_half, data(dataWidth/2-1, 0).sextTo(dataWidth), data(dataWidth-1, 0)))
@@ -185,19 +191,19 @@ class MulExeUnit(
 
 class ADD1 extends Module {
   val io = IO(new Bundle() {
-    val in1 = SInt(128.W)
-    val in2 = SInt(128.W)
-    val out = SInt(128.W)
+    val in1 = Input(SInt(128.W))
+    val in2 = Input(SInt(128.W))
+    val out = Output(SInt(128.W))
   })
   io.out := io.in1 + io.in2
 }
 
 class ADD2 extends Module {
   val io = IO(new Bundle() {
-    val in1 = SInt(128.W)
-    val in2 = SInt(128.W)
-    val in3 = SInt(128.W)
-    val out = SInt(128.W)
+    val in1 = Input(SInt(128.W))
+    val in2 = Input(SInt(128.W))
+    val in3 = Input(SInt(128.W))
+    val out = Output(SInt(128.W))
   })
   io.out := io.in1 + io.in2 + io.in3
 }
