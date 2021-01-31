@@ -42,7 +42,7 @@ class MultiPortExeUnit(
   }
 
   for (i <- 0 until numReadPort){
-    io.rp(i).fu_types := FU_MUL
+    io.rp(i).fu_types := Mux(io.rp(i).req.ready, FU_MUL, 0.U)
   }
   
   def supportedFuncUnits = {
@@ -76,17 +76,16 @@ class MulExeUnit(
     delogic.io.rp(i).brupdate := io.rp(i).brupdate
     delogic.io.rp(i).req.bits := io.rp(i).req.bits
     delogic.io.rp(i).req.valid := io.rp(i).req.valid
-    io.rp(i).req.ready := delogic.io.rp(i).req.ready
-    io.rp(i).fu_types := delogic.io.rp(i).fu_types
   }
 
   for (i <- 0 until numReadPort){
     when(delogic.io.zeroDetectOut(i).resZero){
       io.wp(i).iresp.bits.data := 0.U
       io.wp(i).iresp.valid := io.rp(i).req.valid && !IsKilledByBranch(io.rp(i).brupdate, io.rp(i).req.bits.uop)
-      io.wp(i).iresp.bits.predicated := false.B
       io.wp(i).iresp.bits.uop := io.rp(i).req.bits.uop
       io.wp(i).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(i).brupdate, io.rp(i).req.bits.uop)
+    }.otherwise{
+      io.wp(i).iresp.valid := false.B
     }
   }
 
@@ -99,6 +98,7 @@ class MulExeUnit(
     issuePart.io.in(i).rs1_data := io.rp(i).req.bits.rs1_data
     issuePart.io.in(i).rs2_data := io.rp(i).req.bits.rs2_data
     issuePart.io.in(i).uop := io.rp(i).req.bits.uop
+    io.rp(i).req.ready := issuePart.io.in(i).ready
   }
 
   issuePart.io.brupdate := io.rp(0).brupdate
@@ -138,13 +138,18 @@ class MulExeUnit(
       }.elsewhen(validArray(i).asUInt === "b1100".U){
         add1.io.in1 := prodArray(i)(2) << 32.U
         add1.io.in2 := prodArray(i)(3) << 64.U
+      }.elsewhen(validArray(i).asUInt === "b0101".U){
+        add1.io.in1 := prodArray(i)(0)
+        add1.io.in2 := (prodArray(i)(2) << 32.U)
+      }.elsewhen(validArray(i).asUInt === "b1010".U){
+        add1.io.in1 := prodArray(i)(1) << 32.U
+        add1.io.in2 := prodArray(i)(3) << 64.U
       }
       io.wp(8).iresp.bits.data := Mux(cmdhiArray(i), add1.io.out(2*dataWidth-1, dataWidth), add1.io.out(dataWidth-1, 0))
       io.wp(8).iresp.bits.uop := uopArray(i)
       io.wp(8).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, uopArray(i))
       io.wp(8).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
       validArray(i) := 0.U(4.W).asBools
-      io.wp(i).iresp.bits.predicated := false.B
     }.elsewhen(patternArray(i) === 2.U && PopCount(validArray(i).asUInt) === 4.U){
       add2.io.in1 := Cat(prodArray(i)(3), prodArray(i)(0)).asSInt
       add2.io.in2 := prodArray(i)(1) << 32.U
@@ -154,7 +159,6 @@ class MulExeUnit(
       io.wp(9).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, uopArray(i))
       io.wp(9).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
       validArray(i) := 0.U(4.W).asBools
-      io.wp(i).iresp.bits.predicated := false.B
     }
   }
 
@@ -162,7 +166,7 @@ class MulExeUnit(
   val mul_res = Wire(Vec(numReadPort, SInt(64.W)))
   for (i <- 0 until numReadPort) {
     mul_res(i) := packet(i).bits.rs1_x * packet(i).bits.rs2_x
-    when(packet(i).bits.pattern === 0.U){
+    when(packet(i).bits.pattern === 0.U && packet(i).valid){
       val data = Wire(SInt((2*dataWidth).W))
       when(packet(i).bits.weight === 0.U) {
         data := mul_res(i)
@@ -184,6 +188,7 @@ class MulExeUnit(
         uopArray(packet(i).bits.tag).br_mask := GetNewBrMask(io.rp(i).brupdate, packet(i).bits.uop)
         cmdhiArray(packet(i).bits.tag) := packet(i).bits.cmd_hi
       }
+      io.wp(i + numReadPort).iresp.valid := false.B
     }
   }
 
