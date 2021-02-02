@@ -107,7 +107,7 @@ class MulExeUnit(
   val packet = Wire(Vec(numReadPort, Valid(new Packet)))
   packet := issuePart.io.packet
 
-  val prodArray = RegInit(0.U asTypeOf Vec(3, Vec(4, SInt(64.W))))
+  val prodArray = RegInit(0.U asTypeOf Vec(3, Vec(4, SInt(65.W))))    // also can opt to 64 65 65 64
   val validArray = RegInit(0.U asTypeOf Vec(3, Vec(4, UInt(1.W))))
   val patternArray = RegInit(0.U asTypeOf Vec(3, UInt(2.W)))
   val uopArray = RegInit(VecInit(Seq.fill(3)(NullMicroOp)))
@@ -151,7 +151,7 @@ class MulExeUnit(
       io.wp(8).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
       validArray(i) := 0.U(4.W).asBools
     }.elsewhen(patternArray(i) === 2.U && PopCount(validArray(i).asUInt) === 4.U){
-      add2.io.in1 := Cat(prodArray(i)(3), prodArray(i)(0)).asSInt
+      add2.io.in1 := Cat(prodArray(i)(3)(63,0), prodArray(i)(0)(63,0)).asSInt
       add2.io.in2 := prodArray(i)(1) << 32.U
       add2.io.in3 := prodArray(i)(2) << 32.U
       io.wp(9).iresp.bits.data := Mux(cmdhiArray(i), add2.io.out(2*dataWidth-1, dataWidth), add2.io.out(dataWidth-1, 0))
@@ -163,7 +163,7 @@ class MulExeUnit(
   }
 
   // Multiple
-  val mul_res = Wire(Vec(numReadPort, SInt(64.W)))
+  val mul_res = Wire(Vec(numReadPort, SInt(65.W)))
   for (i <- 0 until numReadPort) {
     mul_res(i) := packet(i).bits.rs1_x * packet(i).bits.rs2_x
     when(packet(i).bits.pattern === 0.U && packet(i).valid){
