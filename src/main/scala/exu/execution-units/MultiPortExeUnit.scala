@@ -130,27 +130,54 @@ class MulExeUnit(
     io.wp(i).iresp.valid := false.B
   }
 
+  val add1_bsy = Wire(false.B)
   for (i <- 2 to 0 by -1) {   // this is unnecessary, because at most only 2 entry will be issue
+    if (i == 2) add1_bsy := false.B
     when(patternArray(i) === 1.U && PopCount(validArray(i).asUInt) === 2.U){
-      when(validArray(i).asUInt === "b0011".U){
-        add1.io.in1 := prodArray(i)(0)
-        add1.io.in2 := (prodArray(i)(1) << 32.U)
-      }.elsewhen(validArray(i).asUInt === "b1100".U){
-        add1.io.in1 := prodArray(i)(2) << 32.U
-        add1.io.in2 := prodArray(i)(3) << 64.U
-      }.elsewhen(validArray(i).asUInt === "b0101".U){
-        add1.io.in1 := prodArray(i)(0)
-        add1.io.in2 := (prodArray(i)(2) << 32.U)
-      }.elsewhen(validArray(i).asUInt === "b1010".U){
-        add1.io.in1 := prodArray(i)(1) << 32.U
-        add1.io.in2 := prodArray(i)(3) << 64.U
+      when(!add1_bsy){
+        when(validArray(i).asUInt === "b0011".U){
+          add1.io.in1 := prodArray(i)(0)
+          add1.io.in2 := (prodArray(i)(1) << 32.U)
+        }.elsewhen(validArray(i).asUInt === "b1100".U){
+          add1.io.in1 := prodArray(i)(2) << 32.U
+          add1.io.in2 := prodArray(i)(3) << 64.U
+        }.elsewhen(validArray(i).asUInt === "b0101".U){
+          add1.io.in1 := prodArray(i)(0)
+          add1.io.in2 := (prodArray(i)(2) << 32.U)
+        }.elsewhen(validArray(i).asUInt === "b1010".U){
+          add1.io.in1 := prodArray(i)(1) << 32.U
+          add1.io.in2 := prodArray(i)(3) << 64.U
+        }
+        io.wp(8).iresp.bits.data := Mux(cmdhiArray(i), add1.io.out(2*dataWidth-1, dataWidth), add1.io.out(dataWidth-1, 0))
+        io.wp(8).iresp.bits.uop := uopArray(i)
+        io.wp(8).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, uopArray(i))
+        io.wp(8).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
+      }.otherwise{
+        when(validArray(i).asUInt === "b0011".U){
+          add2.io.in1 := prodArray(i)(0)
+          add2.io.in2 := (prodArray(i)(1) << 32.U)
+          add2.io.in3 := 0.U
+        }.elsewhen(validArray(i).asUInt === "b1100".U){
+          add2.io.in1 := prodArray(i)(2) << 32.U
+          add2.io.in2 := prodArray(i)(3) << 64.U
+          add2.io.in3 := 0.U
+        }.elsewhen(validArray(i).asUInt === "b0101".U){
+          add2.io.in1 := prodArray(i)(0)
+          add2.io.in2 := (prodArray(i)(2) << 32.U)
+          add2.io.in3 := 0.U
+        }.elsewhen(validArray(i).asUInt === "b1010".U){
+          add2.io.in1 := prodArray(i)(1) << 32.U
+          add2.io.in2 := prodArray(i)(3) << 64.U
+          add2.io.in3 := 0.U
+        }
+        io.wp(9).iresp.bits.data := Mux(cmdhiArray(i), add2.io.out(2*dataWidth-1, dataWidth), add2.io.out(dataWidth-1, 0))
+        io.wp(9).iresp.bits.uop := uopArray(i)
+        io.wp(9).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, uopArray(i))
+        io.wp(9).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
       }
-      io.wp(8).iresp.bits.data := Mux(cmdhiArray(i), add1.io.out(2*dataWidth-1, dataWidth), add1.io.out(dataWidth-1, 0))
-      io.wp(8).iresp.bits.uop := uopArray(i)
-      io.wp(8).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, uopArray(i))
-      io.wp(8).iresp.valid := true.B && !IsKilledByBranch(io.rp(0).brupdate, uopArray(i))
       validArray(i) := 0.U(4.W).asBools
     }.elsewhen(patternArray(i) === 2.U && PopCount(validArray(i).asUInt) === 4.U){
+      assert(!io.wp(9).iresp.valid, "write port 9 already valid!")
       add2.io.in1 := Cat(prodArray(i)(3)(63,0), prodArray(i)(0)(63,0)).asSInt
       add2.io.in2 := prodArray(i)(1) << 32.U
       add2.io.in3 := prodArray(i)(2) << 32.U
