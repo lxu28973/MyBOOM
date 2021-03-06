@@ -93,6 +93,7 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
     state := io.in.bits.uop.muliw_state  // TODO: need to initialized in issue unit  // can create new one because the width changed
   } .elsewhen (io.clear) {
     state := s_invalid
+    slot_contain.req := 0.U(4.W)
   } .otherwise {
     state := next_state
   }
