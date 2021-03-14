@@ -75,7 +75,7 @@ class MulExeUnit(
   for (i <- 0 until numReadPort) {
     delogic.io.rp(i).brupdate := io.rp(i).brupdate
     delogic.io.rp(i).req.bits := io.rp(i).req.bits
-    delogic.io.rp(i).req.valid := io.rp(i).req.valid
+    delogic.io.rp(i).req.valid := io.rp(i).req.valid && !IsKilledByBranch(io.rp(i).brupdate, io.rp(i).req.bits.uop)
   }
 
   for (i <- 0 until numReadPort){
@@ -92,7 +92,7 @@ class MulExeUnit(
   val issuePart = Module(new MulIssuePart(numReadPort, dataWidth, 16))
 
   for (i <- 0 until numReadPort) {
-    issuePart.io.in(i).valid := io.rp(i).req.valid & ~delogic.io.zeroDetectOut(i).resZero
+    issuePart.io.in(i).valid := io.rp(i).req.valid && !delogic.io.zeroDetectOut(i).resZero && !IsKilledByBranch(io.rp(i).brupdate, io.rp(i).req.bits.uop)
     issuePart.io.in(i).dec := delogic.io.decOut(i)
     issuePart.io.in(i).zeroDetect := delogic.io.zeroDetectOut(i)
     issuePart.io.in(i).rs1_data := io.rp(i).req.bits.rs1_data
