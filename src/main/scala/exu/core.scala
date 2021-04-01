@@ -92,7 +92,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   val numFastWakeupPorts      = exe_units.count(_.bypassable)
   val numAlwaysBypassable     = exe_units.count(_.alwaysBypassable)
 
-  val numIntIssueWakeupPorts  = numIrfWritePorts + numFastWakeupPorts - numAlwaysBypassable // + memWidth for ll_wb
+  val numIntIssueWakeupPorts  = numIrfWritePorts + 2 * numFastWakeupPorts - numAlwaysBypassable // + memWidth for ll_wb
   val numIntRenameWakeupPorts = numIntIssueWakeupPorts
   val numFpWakeupPorts        = if (usingFPU) fp_pipeline.io.wakeups.length else 0
 
@@ -833,6 +833,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
                               iss_uops(i).dst_rtype === RT_FIX &&
                               iss_uops(i).ldst_val &&
                               !(io.lsu.ld_miss && (iss_uops(i).iw_p1_poisoned || iss_uops(i).iw_p2_poisoned))
+      fast_wakeup.bits.uop.pdst_spar := 0.U(4.W).asBools()
 
       // Slow Wakeup (uses write-port to register file)
       slow_wakeup.bits.uop := resp.bits.uop
@@ -844,6 +845,8 @@ class BoomCore(implicit p: Parameters) extends BoomModule
       if (exe_units(i).bypassable) {  // can bypass, but maybe invalid sometimes
         int_iss_wakeups(iss_wu_idx) := fast_wakeup
         iss_wu_idx += 1
+        int_iss_wakeups(iss_wu_idx) := exe_units(i).io.bypass(0)
+        iss_wu_idx += 1
       }
       if (!exe_units(i).alwaysBypassable) { //  also need slow_wakeup if not always bypassable
         int_iss_wakeups(iss_wu_idx) := slow_wakeup
@@ -852,6 +855,8 @@ class BoomCore(implicit p: Parameters) extends BoomModule
 
       if (exe_units(i).bypassable) {
         int_ren_wakeups(ren_wu_idx) := fast_wakeup
+        ren_wu_idx += 1
+        int_ren_wakeups(ren_wu_idx) := exe_units(i).io.bypass(0)
         ren_wu_idx += 1
       }
       if (!exe_units(i).alwaysBypassable) {
@@ -1016,6 +1021,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   }{
     issport.valid := wakeup.valid
     issport.bits.pdst := wakeup.bits.uop.pdst
+    issport.bits.pdst_spar := wakeup.bits.uop.pdst_spar
     issport.bits.poisoned := wakeup.bits.uop.iw_p1_poisoned || wakeup.bits.uop.iw_p2_poisoned
 
     require (iu.io.wakeup_ports.length == int_iss_wakeups.length)

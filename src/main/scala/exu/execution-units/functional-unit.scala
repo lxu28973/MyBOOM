@@ -456,9 +456,11 @@ class ALUUnit(isJmpUnit: Boolean = false, numStages: Int = 1, dataWidth: Int)(im
   require (numBypassStages >= 1)
   io.bypass(0).valid := io.req.valid
   io.bypass(0).bits.data := Mux(io.req.bits.uop.is_sfb_br, pc_sel === PC_BRJMP, alu_out)
+  io.bypass(0).bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.bypass(0).bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
   for (i <- 1 until numStages) {
     io.bypass(i).valid := r_val(i-1)
     io.bypass(i).bits.data := r_data(i-1)
+    io.bypass(i).bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.bypass(i).bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
   }
 
   // Exceptions

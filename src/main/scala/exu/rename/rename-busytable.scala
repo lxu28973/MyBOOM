@@ -22,6 +22,8 @@ class BusyResp extends Bundle
   val prs1_busy = Bool()
   val prs2_busy = Bool()
   val prs3_busy = Bool()
+  val prs1_spar = Vec(4, Bool())
+  val prs2_spar = Vec(4, Bool())
 }
 
 class RenameBusyTable(
@@ -41,6 +43,7 @@ class RenameBusyTable(
 
     val wb_pdsts = Input(Vec(numWbPorts, UInt(pregSz.W)))
     val wb_valids = Input(Vec(numWbPorts, Bool()))
+    val wb_spar = Input(Vec(numWbPorts, Vec(4, Bool())))
 
     val debug = new Bundle { val busytable = Output(Bits(numPregs.W)) }
   })
@@ -55,6 +58,14 @@ class RenameBusyTable(
 
   busy_table := busy_table_next
 
+  val spar_table = RegInit(0.U asTypeOf Vec(numPregs, Vec(4, Bool())))
+  // Update sparsity flag
+  for (i <- 0 until numWbPorts) {
+    when(io.wb_valids(i)) {
+      spar_table(io.wb_pdsts(i)) := io.wb_spar(i)
+    }
+  }
+
   // Read the busy table.
   for (i <- 0 until plWidth) {
     val prs1_was_bypassed = (0 until i).map(j =>
@@ -68,6 +79,8 @@ class RenameBusyTable(
     io.busy_resps(i).prs2_busy := busy_table(io.ren_uops(i).prs2) || prs2_was_bypassed && bypass.B
     io.busy_resps(i).prs3_busy := busy_table(io.ren_uops(i).prs3) || prs3_was_bypassed && bypass.B
     if (!float) io.busy_resps(i).prs3_busy := false.B
+    io.busy_resps(i).prs1_spar := spar_table(io.ren_uops(i).prs1)
+    io.busy_resps(i).prs2_spar := spar_table(io.ren_uops(i).prs2)
   }
 
   io.debug.busytable := busy_table

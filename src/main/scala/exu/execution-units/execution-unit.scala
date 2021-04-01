@@ -140,10 +140,13 @@ abstract class ExecutionUnit(
     io.iresp.bits.fflags.valid := false.B
     io.iresp.bits.predicated := false.B
     assert(io.iresp.ready)
+    // Sparsity detect (every 16 bits)
+    io.iresp.bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.iresp.bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
   }
   if (writesLlIrf) {
     io.ll_iresp.bits.fflags.valid := false.B
     io.ll_iresp.bits.predicated := false.B
+    io.ll_iresp.bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.ll_iresp.bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
   }
   if (writesFrf)   {
     io.fresp.bits.fflags.valid := false.B
@@ -306,6 +309,7 @@ class ALUExeUnit(
     io.ll_iresp.valid         := rocc.io.resp.valid
     io.ll_iresp.bits.uop      := rocc.io.resp.bits.uop
     io.ll_iresp.bits.data     := rocc.io.resp.bits.data
+    io.ll_iresp.bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.ll_iresp.bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
   }
 
 

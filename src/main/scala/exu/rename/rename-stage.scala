@@ -310,6 +310,7 @@ class RenameStage(
   busytable.io.rebusy_reqs := ren2_alloc_reqs
   busytable.io.wb_valids := io.wakeups.map(_.valid)
   busytable.io.wb_pdsts := io.wakeups.map(_.bits.uop.pdst)
+  busytable.io.wb_spar := io.wakeups.map(_.bits.uop.pdst_spar)
 
   assert (!(io.wakeups.map(x => x.valid && x.bits.uop.dst_rtype =/= rtype).reduce(_||_)),
    "[rename] Wakeup has wrong rtype.")
@@ -320,6 +321,8 @@ class RenameStage(
     uop.prs1_busy := uop.lrs1_rtype === rtype && busy.prs1_busy
     uop.prs2_busy := uop.lrs2_rtype === rtype && busy.prs2_busy
     uop.prs3_busy := uop.frs3_en && busy.prs3_busy
+    uop.prs1_spar := busy.prs1_spar
+    uop.prs2_spar := busy.prs2_spar
 
     val valid = ren2_valids(w)
     assert (!(valid && busy.prs1_busy && rtype === RT_FIX && uop.lrs1 === 0.U), "[rename] x0 is busy??")

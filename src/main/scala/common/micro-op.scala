@@ -87,6 +87,11 @@ class MicroOp(implicit p: Parameters) extends BoomBundle
   val prs3             = UInt(maxPregSz.W)
   val ppred            = UInt(log2Ceil(ftqSz).W)
 
+  // Sparsity flag(every 16 bits) for register
+  val prs1_spar        = Vec(4, Bool())
+  val prs2_spar        = Vec(4, Bool())
+  val pdst_spar        = Vec(4, Bool())
+
   val prs1_busy        = Bool()
   val prs2_busy        = Bool()
   val prs3_busy        = Bool()

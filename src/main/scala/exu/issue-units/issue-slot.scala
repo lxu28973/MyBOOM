@@ -89,6 +89,10 @@ class IssueSlot(val numWakeupPorts: Int)(implicit p: Parameters)
   val p3    = RegInit(false.B)
   val ppred = RegInit(false.B)
 
+  // Sparsity flag
+  val rs1_spar = VecInit.tabulate(4)((x:Int) => RegInit(false.B))
+  val rs2_spar = VecInit.tabulate(4)((x:Int) => RegInit(false.B))
+
   // Poison if woken up by speculative load.
   // Poison lasts 1 cycle (as ldMiss will come on the next cycle).
   // SO if poisoned is true, set it to false!
@@ -165,11 +169,16 @@ class IssueSlot(val numWakeupPorts: Int)(implicit p: Parameters)
   val next_p3 = WireInit(p3)
   val next_ppred = WireInit(ppred)
 
+  val next_rs1_spar = WireInit(rs1_spar)
+  val next_rs2_spar = WireInit(rs2_spar)
+
   when (io.in_uop.valid) {
     p1 := !(io.in_uop.bits.prs1_busy)
     p2 := !(io.in_uop.bits.prs2_busy)
     p3 := !(io.in_uop.bits.prs3_busy)
     ppred := !(io.in_uop.bits.ppred_busy)
+    rs1_spar := io.in_uop.bits.prs1_spar
+    rs2_spar := io.in_uop.bits.prs2_spar
   }
 
   when (io.ldspec_miss && next_p1_poisoned) {
@@ -185,10 +194,12 @@ class IssueSlot(val numWakeupPorts: Int)(implicit p: Parameters)
     when (io.wakeup_ports(i).valid &&
          (io.wakeup_ports(i).bits.pdst === next_uop.prs1)) {
       p1 := true.B
+      rs1_spar := io.wakeup_ports(i).bits.pdst_spar
     }
     when (io.wakeup_ports(i).valid &&
          (io.wakeup_ports(i).bits.pdst === next_uop.prs2)) {
       p2 := true.B
+      rs2_spar := io.wakeup_ports(i).bits.pdst_spar
     }
     when (io.wakeup_ports(i).valid &&
          (io.wakeup_ports(i).bits.pdst === next_uop.prs3)) {
@@ -211,6 +222,7 @@ class IssueSlot(val numWakeupPorts: Int)(implicit p: Parameters)
       next_uop.lrs1_rtype === RT_FIX) {
       p1 := true.B
       p1_poisoned := true.B
+      rs1_spar := 0.U(4.W).asBools()
       assert (!next_p1_poisoned)
     }
     when (io.spec_ld_wakeup(w).valid &&
@@ -218,6 +230,7 @@ class IssueSlot(val numWakeupPorts: Int)(implicit p: Parameters)
       next_uop.lrs2_rtype === RT_FIX) {
       p2 := true.B
       p2_poisoned := true.B
+      rs2_spar := 0.U(4.W).asBools()
       assert (!next_p2_poisoned)
     }
   }
