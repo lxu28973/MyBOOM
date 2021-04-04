@@ -45,10 +45,12 @@ class MultiPortExeUnit(
     assert(io.wp(i).iresp.ready)
   }
 
+  val uop_prs1_exe_spar = Wire(Vec(numReadPort, UInt(3.W)))
+  val uop_prs2_exe_spar = Wire(Vec(numReadPort, UInt(3.W)))
   for (i <- 0 until numReadPort){
     io.rp(i).fu_types := Mux(io.rp(i).req.ready, FU_MUL, 0.U)
-    io.rp(i).req.bits.uop.prs1_exe_spar :=  spar2ExeSpar(io.rp(i).req.bits.uop.prs1_spar)
-    io.rp(i).req.bits.uop.prs2_exe_spar := spar2ExeSpar(io.rp(i).req.bits.uop.prs2_spar)
+    uop_prs1_exe_spar(i) := spar2ExeSpar(io.rp(i).req.bits.uop.prs1_spar)
+    uop_prs2_exe_spar(i) := spar2ExeSpar(io.rp(i).req.bits.uop.prs2_spar)
   }
 
   def supportedFuncUnits = {
@@ -64,15 +66,15 @@ class MultiPortExeUnit(
   }
 }
 
-class RsPair(dataWidth: Int = 64) extends Bundle {
+class RsPair(val dataWidth: Int = 64) extends Bundle {
   val rs1_data = SInt((dataWidth/4 + 1).W)
   val rs2_data = SInt((dataWidth/4 + 1).W)
 }
 
 class MulArray(numMul: Int = 8) extends Module {
   val io = IO(new Bundle{
-    val in = Vec(numMul, new RsPair)
-    val out = Vec(numMul, SInt(34.W))
+    val in  = Input(Vec(numMul, new RsPair))
+    val out = Output(Vec(numMul, SInt(34.W)))
   })
   for (i <- 0 until numMul) {
     io.out(i) := io.in(i).rs1_data * io.in(i).rs2_data
@@ -81,14 +83,14 @@ class MulArray(numMul: Int = 8) extends Module {
 
 class AddArray extends Module {
   val io = IO(new Bundle{
-    val in = Vec(8, SInt(128.W))
-    val ctl = UInt(3.W)
-    val out = Vec(2, SInt(128.W))
-    val cache_out = SInt(128.W)
+    val in        = Input(Vec(8, SInt(128.W)))
+    val ctl       = Input(UInt(3.W))
+    val out       = Output(Vec(2, SInt(128.W)))
+    val cache_out = Output(SInt(128.W))
   })
   val sels = UIntToOH(io.ctl, 9)
 
-  val internal = Vec(9, SInt(128.W))
+  val internal = Wire(Vec(9, SInt(128.W)))
   internal(0) := io.in(0)
   for (i <- 1 to 3) {
     internal(i) := Mux(sels(i), 0.S, internal(i - 1)) + io.in(i)
@@ -132,11 +134,11 @@ class Mulv2ExeUnit(
 {
 
   val r_valids = RegNext(false.B)
-  val r_uops   = RegNext(new MicroOp)
+  val r_uops   = Reg(new MicroOp)
 
-  val rs_pairs = Vec(2, Vec(4, Vec(4, new RsPair(dataWidth))))
-  val p1_need_mul = Mux(io.rp(0).req.valid, io.rp(0).req.bits.uop.prs1_exe_spar * io.rp(0).req.bits.uop.prs2_exe_spar, 0.U)
-  val p2_need_mul = Mux(io.rp(1).req.valid, io.rp(1).req.bits.uop.prs1_exe_spar * io.rp(1).req.bits.uop.prs2_exe_spar, 0.U)
+  val rs_pairs = Wire(Vec(2, Vec(4, Vec(4, new RsPair(dataWidth)))))
+  val p1_need_mul = Mux(io.rp(0).req.valid, uop_prs1_exe_spar(0) * uop_prs2_exe_spar(0), 0.U)
+  val p2_need_mul = Mux(io.rp(1).req.valid, uop_prs1_exe_spar(1) * uop_prs2_exe_spar(1), 0.U)
   val p1_need_2cycles = p1_need_mul > 8.U
   val p2_need_2cycles = p2_need_mul > 8.U
   val need_2cycles = p1_need_2cycles || p2_need_2cycles
@@ -152,10 +154,10 @@ class Mulv2ExeUnit(
   }
   assert(!(need_2cycles && use_cache), "crash, can't meet two continue need_2cycles")
 
-  val p1_rs1_eff = io.rp(0).req.bits.uop.prs1_exe_spar
-  val p1_rs2_eff = io.rp(0).req.bits.uop.prs2_exe_spar
-  val p2_rs1_eff = io.rp(1).req.bits.uop.prs1_exe_spar
-  val p2_rs2_eff = io.rp(1).req.bits.uop.prs2_exe_spar
+  val p1_rs1_eff = uop_prs1_exe_spar(0)
+  val p1_rs2_eff = uop_prs2_exe_spar(0)
+  val p2_rs1_eff = uop_prs1_exe_spar(1)
+  val p2_rs2_eff = uop_prs2_exe_spar(1)
   when(p1_need_2cycles){
     cache_rs1_data := io.rp(0).req.bits.rs1_data
     cache_rs2_data := io.rp(0).req.bits.rs2_data
@@ -172,15 +174,15 @@ class Mulv2ExeUnit(
     r_uops.br_mask := GetNewBrMask(io.rp(1).brupdate, io.rp(1).req.bits.uop)
   }
 
-  val cmdHi = Vec(2, Bool())
-  val lhsSigned = Vec(2, Bool())
-  val rhsSigned = Vec(2, Bool())
-  val cmdHalf = Vec(2, Bool())
+  val cmdHi = Wire(Vec(2, Bool()))
+  val lhsSigned = Wire(Vec(2, Bool()))
+  val rhsSigned = Wire(Vec(2, Bool()))
+  val cmdHalf = Wire(Vec(2, Bool()))
 
   for (p <- 0 to 1) {
-    val op_fcn = io.rp(p).req.bits.uop.ctrl.op_fcn
-    val rs1_data = io.rp(p).req.bits.rs1_data
-    val rs2_data = io.rp(p).req.bits.rs2_data
+    val op_fcn   = WireDefault(io.rp(p).req.bits.uop.ctrl.op_fcn)
+    val rs1_data = WireDefault(io.rp(p).req.bits.rs1_data)
+    val rs2_data = WireDefault(io.rp(p).req.bits.rs2_data)
     if (p == 1) {
       when(use_cache){
         op_fcn := cache_op_fcn
@@ -220,10 +222,10 @@ class Mulv2ExeUnit(
     }
 
   }
-  val non_spar_table = Vec(2, Vec(4, Vec(4, Bool())))
+  val non_spar_table = Wire(Vec(2, Vec(4, Vec(4, Bool()))))
   for (p <- 0 to 1) {
-    val prs1_exe_spar = io.rp(p).req.bits.uop.prs1_exe_spar
-    val prs2_exe_spar = io.rp(p).req.bits.uop.prs2_exe_spar
+    val prs1_exe_spar = uop_prs1_exe_spar(p)
+    val prs2_exe_spar = uop_prs2_exe_spar(p)
 
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
@@ -244,7 +246,7 @@ class Mulv2ExeUnit(
     }
   }
 
-  val mul_array = new MulArray
+  val mul_array = Module(new MulArray)
   for (i <- 0 until 8) {
     mul_array.io.in(i).rs1_data := 0.S
     mul_array.io.in(i).rs2_data := 0.S
@@ -265,17 +267,17 @@ class Mulv2ExeUnit(
     }
   }
 
-  val add_array = new AddArray
+  val add_array = Module(new AddArray)
 
   add_array.io.in := out
   add_array.io.ctl := p1_need_mul
   cache_rst_data := add_array.io.cache_out
 
-  val add_out = add_array.io.out
+  val add_out = WireDefault(add_array.io.out)
   when(use_cache){
     add_out(1) := add_array.io.out(1) + cache_rst_data
   }
-  val muxed = Wire(Vec(2, SInt(64.W)))
+  val muxed = Wire(Vec(2, UInt(64.W)))
   for (p <- 0 to 1) {
     muxed(p) := Mux(cmdHi(p), add_out(p)(2*64-1, 64), Mux(cmdHalf(p), add_out(p)(32-1, 0).sextTo(64), add_out(p)(64-1, 0)))
   }
