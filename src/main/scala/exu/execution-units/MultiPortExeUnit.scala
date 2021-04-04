@@ -41,7 +41,7 @@ class MultiPortExeUnit(
   for (i <- 0 until numWritePort){
     io.wp(i).iresp.bits.fflags.valid := false.B
     io.wp(i).iresp.bits.predicated := false.B
-    io.wp(i).iresp.bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.wp(i).iresp.bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
+    io.wp(i).iresp.bits.uop.pdst_spar := VecInit((0 until 4).map(x => (io.wp(i).iresp.bits.data((x+1)*dataWidth/4 -1, x*dataWidth/4) === 0.U)))
     assert(io.wp(i).iresp.ready)
   }
 
