@@ -127,7 +127,7 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   if (!fpu) {
 
     if(useMultiPorts) {
-      val mul_exe_unit = Module(new Mulv2ExeUnit)
+      val mul_exe_unit = Module(new MulExeUnit)
       multi_port_units += mul_exe_unit
     }
 
