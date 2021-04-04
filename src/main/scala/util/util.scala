@@ -656,3 +656,12 @@ object BoomCoreStringPrefix
     strs.map(str => prefix + str + "\n").mkString("")
   }
 }
+
+// sparsity functions
+/** Convert sparsity flag to index only considers leading zeros*/
+object spar2ExeSpar
+{
+  def apply(spar: Vec[Bool]) = {
+    Mux(!spar(3), 4.U, Mux(!spar(2), 3.U, Mux(!spar(1), 2.U, Mux(!spar(0), 1.U, 0.U))))
+  }
+}
