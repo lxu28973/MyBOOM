@@ -820,8 +820,11 @@ class BoomCore(implicit p: Parameters) extends BoomModule
     if (exe_units(i).writesIrf) {
       val fast_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
       val slow_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
+      val mid_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
+
       fast_wakeup := DontCare
       slow_wakeup := DontCare
+      mid_wakeup := DontCare
 
       val resp = exe_units(i).io.iresp
       assert(!(resp.valid && resp.bits.uop.rf_wen && resp.bits.uop.dst_rtype =/= RT_FIX))
@@ -842,10 +845,17 @@ class BoomCore(implicit p: Parameters) extends BoomModule
                                 !resp.bits.uop.bypassable &&
                                 resp.bits.uop.dst_rtype === RT_FIX
 
+      // Middle Wakeup (use first bypass port)
+      mid_wakeup.bits.uop := exe_units(i).io.bypass(0).bits.uop
+      mid_wakeup.valid := exe_units(i).io.bypass(0).valid &&
+                          exe_units(i).io.bypass(0).bits.uop.bypassable &&
+                          exe_units(i).io.bypass(0).bits.uop.dst_rtype === RT_FIX &&
+                          exe_units(i).io.bypass(0).bits.uop.ldst_val
+
       if (exe_units(i).bypassable) {  // can bypass, but maybe invalid sometimes
         int_iss_wakeups(iss_wu_idx) := fast_wakeup
         iss_wu_idx += 1
-        int_iss_wakeups(iss_wu_idx) := exe_units(i).io.bypass(0)
+        int_iss_wakeups(iss_wu_idx) := mid_wakeup
         iss_wu_idx += 1
       }
       if (!exe_units(i).alwaysBypassable) { //  also need slow_wakeup if not always bypassable
@@ -856,7 +866,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
       if (exe_units(i).bypassable) {
         int_ren_wakeups(ren_wu_idx) := fast_wakeup
         ren_wu_idx += 1
-        int_ren_wakeups(ren_wu_idx) := exe_units(i).io.bypass(0)
+        int_ren_wakeups(ren_wu_idx) := mid_wakeup
         ren_wu_idx += 1
       }
       if (!exe_units(i).alwaysBypassable) {
