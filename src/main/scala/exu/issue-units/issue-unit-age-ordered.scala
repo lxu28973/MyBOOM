@@ -117,6 +117,11 @@ class IssueUnitCollapsing(
   val iss_is_fu_mul = Wire(Vec(issueWidth, Bool()))
   val iss_mul_need_2_cycle = Wire(Vec(issueWidth, Bool()))
   val iss_need_muls = Wire(Vec(issueWidth, Bool()))
+  for (w <- 0 until issueWidth) {
+    iss_is_fu_mul(w) := false.B
+    iss_need_muls(w) := false.B
+    iss_mul_need_2_cycle(w) := false.B
+  }
   for (w <- 0 until(issueWidth - 1)) {
     free_muls(w+1) := Mux(io.iss_valids(w) && iss_is_fu_mul(w), Mux(iss_mul_need_2_cycle(w), 0.U, free_muls(w) - iss_need_muls(w)), free_muls(w))
     when(iss_is_fu_mul(w) && iss_mul_need_2_cycle(w)){
