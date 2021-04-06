@@ -180,6 +180,7 @@ class Mulv2ExeUnit(
   val cmdHalf = Wire(Vec(2, Bool()))
 
   for (p <- 0 to 1) {
+    io.rp(p).req.ready := true.B
     val op_fcn   = WireDefault(io.rp(p).req.bits.uop.ctrl.op_fcn)
     val rs1_data = WireDefault(io.rp(p).req.bits.rs1_data)
     val rs2_data = WireDefault(io.rp(p).req.bits.rs2_data)
