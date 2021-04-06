@@ -84,7 +84,7 @@ class MulArray(numMul: Int = 8) extends Module {
 class AddArray extends Module {
   val io = IO(new Bundle{
     val in        = Input(Vec(8, SInt(128.W)))
-    val ctl       = Input(UInt(3.W))
+    val ctl       = Input(UInt(4.W))
     val out       = Output(Vec(2, SInt(128.W)))
     val cache_out = Output(SInt(128.W))
   })
