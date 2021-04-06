@@ -59,10 +59,13 @@ class RenameBusyTable(
   busy_table := busy_table_next
 
   val spar_table = RegInit(0.U asTypeOf Vec(numPregs, Vec(4, Bool())))
+  spar_table(0) := VecInit(Seq.fill(4)(true.B))
   // Update sparsity flag
   for (i <- 0 until numWbPorts) {
     when(io.wb_valids(i)) {
-      spar_table(io.wb_pdsts(i)) := io.wb_spar(i)
+      when(io.wb_pdsts(i) =/= 0.U){
+        spar_table(io.wb_pdsts(i)) := io.wb_spar(i)
+      }
     }
   }
 
