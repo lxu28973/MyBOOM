@@ -164,8 +164,8 @@ class Mulv2ExeUnit(
     // handle incoming request
     r_valids := io.rp(0).req.valid && !IsKilledByBranch(io.rp(0).brupdate, io.rp(0).req.bits.uop) && !io.rp(0).req.bits.kill
     r_uops   := io.rp(0).req.bits.uop
-    r_uops.prs1_spar   := uop_prs1_exe_spar(0)
-    r_uops.prs2_spar   := uop_prs2_exe_spar(0)
+    r_uops.prs1_exe_spar   := uop_prs1_exe_spar(0)
+    r_uops.prs2_exe_spar   := uop_prs2_exe_spar(0)
     r_uops.br_mask := GetNewBrMask(io.rp(0).brupdate, io.rp(0).req.bits.uop)
   }.elsewhen(p2_need_2cycles){
     cache_rs1_data := io.rp(1).req.bits.rs1_data
@@ -173,8 +173,8 @@ class Mulv2ExeUnit(
     // handle incoming request
     r_valids := io.rp(1).req.valid && !IsKilledByBranch(io.rp(1).brupdate, io.rp(1).req.bits.uop) && !io.rp(1).req.bits.kill
     r_uops   := io.rp(1).req.bits.uop
-    r_uops.prs1_spar   := uop_prs1_exe_spar(1)
-    r_uops.prs2_spar   := uop_prs2_exe_spar(1)
+    r_uops.prs1_exe_spar   := uop_prs1_exe_spar(1)
+    r_uops.prs2_exe_spar   := uop_prs2_exe_spar(1)
     r_uops.br_mask := GetNewBrMask(io.rp(1).brupdate, io.rp(1).req.bits.uop)
   }
 
