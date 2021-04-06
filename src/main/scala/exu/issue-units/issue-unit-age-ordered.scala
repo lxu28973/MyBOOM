@@ -140,7 +140,7 @@ class IssueUnitCollapsing(
     for (w <- 0 until issueWidth) {
       val is_fu_mul = issue_slots(i).uop.fu_code === FU_MUL
       val fu_match = (issue_slots(i).uop.fu_code & io.fu_types(w)) =/= 0.U
-      val can_allocate = Mux(is_fu_mul,  (free_muls(w) >= need_muls || free_muls(w)(2)) && fu_match, fu_match)
+      val can_allocate = Mux(is_fu_mul,  (free_muls(w) >= need_muls || free_muls(w)(3)) && fu_match, fu_match)
 
       when (requests(i) && !uop_issued && can_allocate && !port_issued(w)) {
         issue_slots(i).grant := true.B
