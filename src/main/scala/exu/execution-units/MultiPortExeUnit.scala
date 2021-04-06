@@ -227,6 +227,12 @@ class Mulv2ExeUnit(
   for (p <- 0 to 1) {
     val prs1_exe_spar = uop_prs1_exe_spar(p)
     val prs2_exe_spar = uop_prs2_exe_spar(p)
+    if (p == 1) {
+      when(use_cache){
+        prs1_exe_spar := cache_rs1_eff
+        prs2_exe_spar := cache_rs2_eff
+      }
+    }
 
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
