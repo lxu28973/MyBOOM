@@ -30,12 +30,15 @@ class MultiPortExeUnitIOw(val dataWidth: Int)(implicit p: Parameters) extends Bo
 class MultiPortExeUnit(
                   val dataWidth: Int,
                   val numReadPort: Int,
-                  val numWritePort: Int
+                  val numWritePort: Int,
+                  val hasAlu: Boolean
                 )(implicit p: Parameters) extends BoomModule
 {
   val io = IO(new Bundle() {
     val rp = Vec(numReadPort, new MultiPortExeUnitIOr(dataWidth))
     val wp = Vec(numWritePort, new MultiPortExeUnitIOw(dataWidth))
+    val bypass = if (hasAlu) Output(Vec(2, Valid(new ExeUnitResp(dataWidth)))) else null
+    val brinfo = if (hasAlu) Output(Vec(2, new BrResolutionInfo())) else null
   })
 
   for (i <- 0 until numWritePort){
@@ -124,12 +127,14 @@ class AddArray extends Module {
 class Mulv2ExeUnit(
                   numReadPort: Int = 2,
                   numWritePort: Int = 2,
-                  dataWidth: Int = 64
+                  dataWidth: Int = 64,
+                  hasAlu: Boolean = true
                   )(implicit p: Parameters)
   extends MultiPortExeUnit(
     dataWidth = dataWidth,
     numReadPort = numReadPort,
-    numWritePort = numWritePort
+    numWritePort = numWritePort,
+    hasAlu = hasAlu
   )
 {
 
@@ -318,18 +323,59 @@ class Mulv2ExeUnit(
   io.wp(1).iresp.bits.uop := iresp_uop(1)
   io.wp(1).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(1).brupdate, iresp_uop(1))
   io.wp(1).iresp.bits.data := iresp_data(1)
+
+  for (p <- 0 to 1) {
+    val alu = Module(new ALUUnit(isJmpUnit = false,
+                                 numStages = 1,
+                                 dataWidth = xLen))
+
+    alu.io.req.valid := (
+      io.rp(p).req.valid &&
+        (io.rp(p).req.bits.uop.fu_code === FU_ALU ||
+          io.rp(p).req.bits.uop.fu_code === FU_JMP ||
+          (io.rp(p).req.bits.uop.fu_code === FU_CSR && io.rp(p).req.bits.uop.uopc =/= uopROCC)))
+    //ROCC Rocc Commands are taken by the RoCC unit
+
+    alu.io.req.bits.uop := io.rp(p).req.bits.uop
+    alu.io.req.bits.kill := io.rp(p).req.bits.kill
+    alu.io.req.bits.rs1_data := io.rp(p).req.bits.rs1_data
+    alu.io.req.bits.rs2_data := io.rp(p).req.bits.rs2_data
+    alu.io.req.bits.rs3_data := DontCare
+    alu.io.req.bits.pred_data := io.rp(p).req.bits.pred_data
+    alu.io.resp.ready := DontCare
+    alu.io.brupdate := io.rp(p).brupdate
+
+    // Bypassing only applies to ALU
+    io.bypass(p) := alu.io.bypass
+
+    // branch unit is embedded inside the ALU
+    io.brinfo(p) := alu.io.brinfo
+
+    when(alu.io.resp.valid){
+      io.wp(p).iresp.valid     := alu.io.resp.valid
+      io.wp(p).iresp.bits.uop  := alu.io.resp.bits.uop
+      io.wp(p).iresp.bits.data := alu.io.resp.bits.data
+      io.wp(p).iresp.bits.predicated := alu.io.resp.bits.predicated
+    }
+
+    io.wp(p).iresp.bits.uop.csr_addr := ImmGen(alu.io.resp.bits.uop.imm_packed, IS_I).asUInt
+    io.wp(p).iresp.bits.uop.ctrl.csr_cmd := alu.io.resp.bits.uop.ctrl.csr_cmd
+  }
+
 }
 
 
 class MulExeUnit(
                 numReadPort: Int = 4,
                 numWritePort: Int = 10,
-                dataWidth: Int = 64
+                dataWidth: Int = 64,
+                hasAlu: Boolean = false
                 )(implicit p: Parameters)
   extends MultiPortExeUnit(
     dataWidth,
     numReadPort,
-    numWritePort
+    numWritePort,
+    hasAlu
   )
 {
 
@@ -515,7 +561,8 @@ class MulExeUnitForTest(
   extends MultiPortExeUnit(
     p(tile.XLen) + 1,
     numReadPort,
-    numWritePort
+    numWritePort,
+    false
   )
 {
   val numStages = 3
