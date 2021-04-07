@@ -124,6 +124,11 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
 
   val useMultiPorts = true  // TODO: now control use MultiPortsUnits or not here, maybe can add it to Param later
 
+  lazy val mp_mul_unit = {
+    require (useMultiPorts)
+    multi_port_units(0)
+  }
+
   if (!fpu) {
 
     if(useMultiPorts) {

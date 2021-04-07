@@ -205,6 +205,15 @@ class BoomCore(implicit p: Parameters) extends BoomModule
     b := a.io.brinfo
     b.valid := a.io.brinfo.valid && !rob.io.flush.valid
   }
+  // FIXME: connect brinfo for core width = 4 with multi-port unit, wrong with other config
+  val useMP = true
+  if (useMP) {
+    brinfos(2) := exe_units.mp_mul_unit.io.brinfo(0)
+    brinfos(2).valid := exe_units.mp_mul_unit.io.brinfo(0).valid && !rob.io.flush.valid
+    brinfos(3) := exe_units.mp_mul_unit.io.brinfo(1)
+    brinfos(3).valid := exe_units.mp_mul_unit.io.brinfo(1).valid && !rob.io.flush.valid
+  }
+
   b1.resolve_mask := brinfos.map(x => x.valid << x.uop.br_tag).reduce(_|_)
   b1.mispredict_mask := brinfos.map(x => (x.valid && x.mispredict) << x.uop.br_tag).reduce(_|_)
 
