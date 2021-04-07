@@ -182,8 +182,30 @@ class RegisterRead(
       pred_cases ++= Array((bypass.valid && (ppred === bypass.bits.uop.pdst) && bypass.bits.uop.is_sfb_br, bypass.bits.data))
     }
 
-    if (numReadPorts > 0) bypassed_rs1_data(w)  := MuxCase(rrd_rs1_data(w), rs1_cases)
-    if (numReadPorts > 1) bypassed_rs2_data(w)  := MuxCase(rrd_rs2_data(w), rs2_cases)
+    if (numReadPorts > 0) {
+      bypassed_rs1_data(w)  := MuxCase(rrd_rs1_data(w), rs1_cases)
+      for (b <- 0 until numTotalBypassPorts)
+      {
+        val bypass = io.bypass(b)
+        // can't use "io.bypass.valid(b) since it would create a combinational loop on branch kills"
+        when(bypass.valid && (prs1 === bypass.bits.uop.pdst) && bypass.bits.uop.rf_wen
+          && bypass.bits.uop.dst_rtype === RT_FIX && lrs1_rtype === RT_FIX && (prs1 =/= 0.U)){
+          rrd_uops(w).prs1_spar := bypass.bits.uop.pdst_spar
+        }
+      }
+    }
+    if (numReadPorts > 1) {
+      bypassed_rs2_data(w)  := MuxCase(rrd_rs2_data(w), rs2_cases)
+      for (b <- 0 until numTotalBypassPorts)
+      {
+        val bypass = io.bypass(b)
+        // can't use "io.bypass.valid(b) since it would create a combinational loop on branch kills"
+        when(bypass.valid && (prs2 === bypass.bits.uop.pdst) && bypass.bits.uop.rf_wen
+               && bypass.bits.uop.dst_rtype === RT_FIX && lrs2_rtype === RT_FIX && (prs2 =/= 0.U)){
+          rrd_uops(w).prs2_spar := bypass.bits.uop.pdst_spar
+        }
+      }
+    }
     if (enableSFBOpt)     bypassed_pred_data(w) := MuxCase(rrd_pred_data(w), pred_cases)
   }
 
