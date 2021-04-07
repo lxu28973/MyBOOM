@@ -188,11 +188,13 @@ class Mulv2ExeUnit(
     val op_fcn   = WireDefault(io.rp(p).req.bits.uop.ctrl.op_fcn)
     val rs1_data = WireDefault(io.rp(p).req.bits.rs1_data)
     val rs2_data = WireDefault(io.rp(p).req.bits.rs2_data)
+    val fcn_dw   = WireDefault(io.rp(p).req.bits.uop.ctrl.fcn_dw)
     if (p == 1) {
       when(use_cache){
         op_fcn := cache_op_fcn
         rs1_data := cache_rs1_data
         rs2_data := cache_rs2_data
+        fcn_dw := r_uops.ctrl.fcn_dw
       }
     }
     val decode = List(
@@ -202,7 +204,7 @@ class Mulv2ExeUnit(
       FN_MULHSU -> List(Y, Y, N))
     val cmdHi_ :: lhsSigned_ :: rhsSigned_ :: Nil =
       DecodeLogic(op_fcn, List(X, X, X), decode).map(_.asBool)
-    val cmdHalf_ = (dataWidth > 32).B && io.rp(p).req.bits.uop.ctrl.fcn_dw === DW_32  // for MULW instruction
+    val cmdHalf_ = (dataWidth > 32).B && fcn_dw === DW_32  // for MULW instruction
 
     cmdHi(p) := cmdHi_
     lhsSigned(p) := lhsSigned_
