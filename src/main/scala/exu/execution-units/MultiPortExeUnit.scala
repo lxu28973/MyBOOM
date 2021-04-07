@@ -49,8 +49,8 @@ class MultiPortExeUnit(
   val uop_prs2_exe_spar = Wire(Vec(numReadPort, UInt(3.W)))
   for (i <- 0 until numReadPort){
     io.rp(i).fu_types := Mux(io.rp(i).req.ready, FU_MUL, 0.U)
-    uop_prs1_exe_spar(i) := spar2ExeSpar(io.rp(i).req.bits.uop.prs1_spar)
-    uop_prs2_exe_spar(i) := spar2ExeSpar(io.rp(i).req.bits.uop.prs2_spar)
+    uop_prs1_exe_spar(i) := Mux(io.rp(i).req.valid, spar2ExeSpar(io.rp(i).req.bits.uop.prs1_spar), 0.U)
+    uop_prs2_exe_spar(i) := Mux(io.rp(i).req.valid, spar2ExeSpar(io.rp(i).req.bits.uop.prs2_spar), 0.U)
   }
 
   def supportedFuncUnits = {
