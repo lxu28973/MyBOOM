@@ -47,10 +47,14 @@ class MultiPortExeUnit(
 
   val uop_prs1_exe_spar = Wire(Vec(numReadPort, UInt(3.W)))
   val uop_prs2_exe_spar = Wire(Vec(numReadPort, UInt(3.W)))
+  val uop_prs1_non_spar = Wire(Vec(numReadPort, Vec(4, Bool())))
+  val uop_prs2_non_spar = Wire(Vec(numReadPort, Vec(4, Bool())))
   for (i <- 0 until numReadPort){
     io.rp(i).fu_types := Mux(io.rp(i).req.ready, FU_MUL, 0.U)
-    uop_prs1_exe_spar(i) := Mux(io.rp(i).req.valid, spar2ExeSpar(io.rp(i).req.bits.uop.prs1_spar), 0.U)
-    uop_prs2_exe_spar(i) := Mux(io.rp(i).req.valid, spar2ExeSpar(io.rp(i).req.bits.uop.prs2_spar), 0.U)
+    uop_prs1_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs1_spar.map(!_)), 0.U)
+    uop_prs2_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs2_spar.map(!_)), 0.U)
+    uop_prs1_non_spar(i) := io.rp(i).req.bits.uop.prs1_spar.map(!_)
+    uop_prs2_non_spar(i) := io.rp(i).req.bits.uop.prs2_spar.map(!_)
   }
 
   def supportedFuncUnits = {
@@ -144,8 +148,6 @@ class Mulv2ExeUnit(
   val need_2cycles = p1_need_2cycles || p2_need_2cycles
   val cache_rs1_data = RegNext(0.U(64.W))
   val cache_rs2_data = RegNext(0.U(64.W))
-  val cache_rs1_eff = r_uops.prs1_exe_spar
-  val cache_rs2_eff = r_uops.prs2_exe_spar
   val cache_op_fcn = r_uops.ctrl.op_fcn
   val cache_rst_data = RegNext(0.S(128.W))
   val use_cache = RegNext(false.B)
@@ -153,19 +155,13 @@ class Mulv2ExeUnit(
     use_cache := true.B
   }
   assert(!(need_2cycles && use_cache), "crash, can't meet two continue need_2cycles")
-
-  val p1_rs1_eff = uop_prs1_exe_spar(0)
-  val p1_rs2_eff = uop_prs2_exe_spar(0)
-  val p2_rs1_eff = uop_prs1_exe_spar(1)
-  val p2_rs2_eff = uop_prs2_exe_spar(1)
+  
   when(p1_need_2cycles){
     cache_rs1_data := io.rp(0).req.bits.rs1_data
     cache_rs2_data := io.rp(0).req.bits.rs2_data
     // handle incoming request
     r_valids := io.rp(0).req.valid && !IsKilledByBranch(io.rp(0).brupdate, io.rp(0).req.bits.uop) && !io.rp(0).req.bits.kill
     r_uops   := io.rp(0).req.bits.uop
-    r_uops.prs1_exe_spar   := uop_prs1_exe_spar(0)
-    r_uops.prs2_exe_spar   := uop_prs2_exe_spar(0)
     r_uops.br_mask := GetNewBrMask(io.rp(0).brupdate, io.rp(0).req.bits.uop)
   }.elsewhen(p2_need_2cycles){
     cache_rs1_data := io.rp(1).req.bits.rs1_data
@@ -173,8 +169,6 @@ class Mulv2ExeUnit(
     // handle incoming request
     r_valids := io.rp(1).req.valid && !IsKilledByBranch(io.rp(1).brupdate, io.rp(1).req.bits.uop) && !io.rp(1).req.bits.kill
     r_uops   := io.rp(1).req.bits.uop
-    r_uops.prs1_exe_spar   := uop_prs1_exe_spar(1)
-    r_uops.prs2_exe_spar   := uop_prs2_exe_spar(1)
     r_uops.br_mask := GetNewBrMask(io.rp(1).brupdate, io.rp(1).req.bits.uop)
   }
 
@@ -230,31 +224,22 @@ class Mulv2ExeUnit(
 
   }
   val non_spar_table = Wire(Vec(2, Vec(4, Vec(4, Bool()))))
+  val cache_non_spar_table = Reg(Vec(2, Vec(4, Vec(4, Bool()))))
+  var non_spar_num = 0.U
   for (p <- 0 to 1) {
-    val prs1_exe_spar = uop_prs1_exe_spar(p)
-    val prs2_exe_spar = uop_prs2_exe_spar(p)
-    if (p == 1) {
-      when(use_cache){
-        prs1_exe_spar := cache_rs1_eff
-        prs2_exe_spar := cache_rs2_eff
-      }
-    }
+    val prs1_non_spar = uop_prs1_non_spar(p)
+    val prs2_non_spar = uop_prs2_non_spar(p)
 
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
-        non_spar_table(p)(i)(j) := (prs1_exe_spar > i.U && prs2_exe_spar > j.U)
-        if (p == 1) {
-          if (i < 2) {
-            when(use_cache){
-              non_spar_table(p)(i)(j) := false.B
-            }
-          }
-          else if (i == 3 & j < 2) {
-            when(use_cache && cache_rs1_eff === 3.U){
-              non_spar_table(p)(i)(j) := false.B
-            }
-          }
+        when(non_spar_num < 8.U){
+          non_spar_table(p)(i)(j) := (prs1_non_spar(i) && prs2_non_spar(i))
+          cache_non_spar_table(p)(i)(j) := false.B
+        }.otherwise{
+          non_spar_table(p)(i)(j) := false.B
+          cache_non_spar_table(p)(i)(j) := (prs1_non_spar(i) && prs2_non_spar(i))
         }
+        non_spar_num = Mux(prs1_non_spar(i) && prs2_non_spar(i), non_spar_num + 1.U, non_spar_num)
       }
     }
   }
@@ -271,14 +256,21 @@ class Mulv2ExeUnit(
   for (p <- 0 to 1) {
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
-        when(non_spar_table(p)(i)(j) && mul_ind < 8.U) {
+        val need_mul = Wire(Bool())
+        if (p == 1) {
+          need_mul := Mux(use_cache, cache_non_spar_table(p)(i)(j), non_spar_table(p)(i)(j))
+        } else {
+          need_mul := non_spar_table(p)(i)(j)
+        }
+        when(need_mul) {
           in(mul_ind) := rs_pairs(p)(i)(j)
           out(mul_ind) := mul_array.io.out(mul_ind) << ((i + j) * 16).U
         }
-        mul_ind = Mux(non_spar_table(p)(i)(j) && mul_ind < 8.U, mul_ind + 1.U, mul_ind)
+        mul_ind = Mux(need_mul, mul_ind + 1.U, mul_ind)
       }
     }
   }
+  assert(mul_ind < 8.U, "use too many muls")
 
   val add_array = Module(new AddArray)
 

@@ -91,8 +91,6 @@ class MicroOp(implicit p: Parameters) extends BoomBundle
   val prs1_spar        = Vec(4, Bool())
   val prs2_spar        = Vec(4, Bool())
   val pdst_spar        = Vec(4, Bool())
-  val prs1_exe_spar    = UInt(3.W)
-  val prs2_exe_spar    = UInt(3.W)
 
   val prs1_busy        = Bool()
   val prs2_busy        = Bool()
