@@ -891,6 +891,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
         val fast_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
         val slow_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
         val mid_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
+        fast_wakeup := DontCare
         slow_wakeup := DontCare
         mid_wakeup := DontCare
 
