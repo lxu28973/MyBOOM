@@ -205,7 +205,7 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   val numIrfReadPorts     = exe_units.count(_.readsIrf) * 2 + multi_port_units.map(_.numReadPort).sum * 2
   val numIrfWritePorts    = exe_units.count(_.writesIrf) + multi_port_units.map(_.numWritePort).sum
   val numLlIrfWritePorts  = exe_units.count(_.writesLlIrf)
-  val numTotalBypassPorts = exe_units.withFilter(_.bypassable).map(_.numBypassStages).foldLeft(0)(_+_)
+  val numTotalBypassPorts = exe_units.withFilter(_.bypassable).map(_.numBypassStages).foldLeft(0)(_+_) + multi_port_units.map(_.numWritePort).sum
 
   val numFrfReaders       = exe_units.count(_.readsFrf)
   val numFrfReadPorts     = exe_units.count(_.readsFrf) * 3
@@ -214,5 +214,5 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
 
   // The mem-unit will also bypass writes to readers in the RRD stage.
   // NOTE: This does NOT include the ll_wport
-  val bypassable_write_port_mask = exe_units.withFilter(x => x.writesIrf).map(u => u.bypassable) ++ multi_port_units.map(u => Seq.fill(u.numWritePort)(false)).flatten
+  val bypassable_write_port_mask = exe_units.withFilter(x => x.writesIrf).map(u => u.bypassable) ++ multi_port_units.map(u => Seq.fill(u.numWritePort)(if(u.hasAlu) true else false)).flatten
 }

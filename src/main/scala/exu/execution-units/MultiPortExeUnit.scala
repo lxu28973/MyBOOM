@@ -37,8 +37,8 @@ class MultiPortExeUnit(
   val io = IO(new Bundle() {
     val rp = Vec(numReadPort, new MultiPortExeUnitIOr(dataWidth))
     val wp = Vec(numWritePort, new MultiPortExeUnitIOw(dataWidth))
-    val bypass = if (hasAlu) Output(Vec(2, Valid(new ExeUnitResp(dataWidth)))) else null
-    val brinfo = if (hasAlu) Output(Vec(2, new BrResolutionInfo())) else null
+    val bypass = if (hasAlu) Output(Vec(numWritePort, Valid(new ExeUnitResp(dataWidth)))) else null
+    val brinfo = if (hasAlu) Output(Vec(numWritePort, new BrResolutionInfo())) else null
   })
 
   for (i <- 0 until numWritePort){

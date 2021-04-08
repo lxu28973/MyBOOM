@@ -92,7 +92,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   val numFastWakeupPorts      = exe_units.count(_.bypassable)
   val numAlwaysBypassable     = exe_units.count(_.alwaysBypassable)
 
-  val numIntIssueWakeupPorts  = numIrfWritePorts + 2 * numFastWakeupPorts - numAlwaysBypassable // + memWidth for ll_wb
+  val numIntIssueWakeupPorts  = numIrfWritePorts + 2 * numFastWakeupPorts - numAlwaysBypassable + (if(exe_units.mp_mul_unit.hasAlu) 2 else 0) // + memWidth for ll_wb
   val numIntRenameWakeupPorts = numIntIssueWakeupPorts
   val numFpWakeupPorts        = if (usingFPU) fp_pipeline.io.wakeups.length else 0
 
@@ -889,7 +889,9 @@ class BoomCore(implicit p: Parameters) extends BoomModule
     if (exe_units.mpapply(i).numWritePort != 0) {
       for (j <- 0 until exe_units.mpapply(i).numWritePort) {
         val slow_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
+        val mid_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
         slow_wakeup := DontCare
+        mid_wakeup := DontCare
 
         val resp = exe_units.mpapply(i).io.wp(j).iresp
         assert(!(resp.valid && resp.bits.uop.rf_wen && resp.bits.uop.dst_rtype =/= RT_FIX))
@@ -902,10 +904,21 @@ class BoomCore(implicit p: Parameters) extends BoomModule
           !resp.bits.uop.bypassable &&
           resp.bits.uop.dst_rtype === RT_FIX
 
+        // Middle Wakeup (use first bypass port)
+        mid_wakeup.bits.uop := exe_units.mpapply(i).io.bypass(0).bits.uop
+        mid_wakeup.valid := exe_units.mpapply(i).io.bypass(0).valid &&
+          exe_units.mpapply(i).io.bypass(0).bits.uop.bypassable &&
+          exe_units.mpapply(i).io.bypass(0).bits.uop.dst_rtype === RT_FIX &&
+          exe_units.mpapply(i).io.bypass(0).bits.uop.ldst_val
+
         int_iss_wakeups(iss_wu_idx) := slow_wakeup
+        iss_wu_idx += 1
+        int_iss_wakeups(iss_wu_idx) := mid_wakeup
         iss_wu_idx += 1
 
         int_ren_wakeups(ren_wu_idx) := slow_wakeup
+        ren_wu_idx += 1
+        int_ren_wakeups(ren_wu_idx) := mid_wakeup
         ren_wu_idx += 1
       }
     }
@@ -1177,6 +1190,12 @@ class BoomCore(implicit p: Parameters) extends BoomModule
       for (j <- 0 until exe_unit.numReadPort) {
         exe_unit.io.rp(j).req <> iregister_read.io.exe_reqs(iss_idx)
         iss_idx += 1
+      }
+      if (exe_unit.hasAlu) {
+        for (i <- 0 until exe_unit.numWritePort) {
+          bypasses(bypass_idx) := exe_unit.io.bypass(i)
+          bypass_idx += 1
+        }
       }
     }
   }
