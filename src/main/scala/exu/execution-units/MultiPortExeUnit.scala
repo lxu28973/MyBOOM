@@ -188,13 +188,13 @@ class Mulv2ExeUnit(
   val rhsSigned = Wire(Vec(2, Bool()))
   val cmdHalf = Wire(Vec(2, Bool()))
 
-  for (p <- 0 to 1) {
-    io.rp(p).req.ready := true.B
-    val op_fcn   = WireDefault(io.rp(p).req.bits.uop.ctrl.op_fcn)
-    val rs1_data = WireDefault(io.rp(p).req.bits.rs1_data)
-    val rs2_data = WireDefault(io.rp(p).req.bits.rs2_data)
-    val fcn_dw   = WireDefault(io.rp(p).req.bits.uop.ctrl.fcn_dw)
-    if (p == 1) {
+  for (o <- 0 to 1) {
+    io.rp(o).req.ready := true.B
+    val op_fcn   = WireDefault(io.rp(o).req.bits.uop.ctrl.op_fcn)
+    val rs1_data = WireDefault(io.rp(o).req.bits.rs1_data)
+    val rs2_data = WireDefault(io.rp(o).req.bits.rs2_data)
+    val fcn_dw   = WireDefault(io.rp(o).req.bits.uop.ctrl.fcn_dw)
+    if (o == 1) {
       when(use_cache){
         op_fcn := cache_op_fcn
         rs1_data := cache_rs1_data
@@ -211,34 +211,34 @@ class Mulv2ExeUnit(
       DecodeLogic(op_fcn, List(X, X, X), decode).map(_.asBool)
     val cmdHalf_ = (dataWidth > 32).B && fcn_dw === DW_32  // for MULW instruction
 
-    cmdHi(p) := cmdHi_
-    lhsSigned(p) := lhsSigned_
-    rhsSigned(p) := rhsSigned_
-    cmdHalf(p) := cmdHalf_
+    cmdHi(o) := cmdHi_
+    lhsSigned(o) := lhsSigned_
+    rhsSigned(o) := rhsSigned_
+    cmdHalf(o) := cmdHalf_
 
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
         if (i == 3){
-          rs_pairs(p)(i)(j).rs1_data := Cat(lhsSigned_ && rs1_data(dataWidth-1), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+          rs_pairs(o)(i)(j).rs1_data := Cat(lhsSigned_ && rs1_data(dataWidth-1), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
         }
         else {
-          rs_pairs(p)(i)(j).rs1_data := Cat(0.U(1.W), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+          rs_pairs(o)(i)(j).rs1_data := Cat(0.U(1.W), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
         }
         if (j == 3){
-          rs_pairs(p)(i)(j).rs2_data := Cat(rhsSigned_ && rs2_data(dataWidth-1), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+          rs_pairs(o)(i)(j).rs2_data := Cat(rhsSigned_ && rs2_data(dataWidth-1), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
         }
         else {
-          rs_pairs(p)(i)(j).rs2_data := Cat(0.U(1.W), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+          rs_pairs(o)(i)(j).rs2_data := Cat(0.U(1.W), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
         }
       }
     }
 
   }
   val non_spar_table = Wire(Vec(2, Vec(4, Vec(4, Bool()))))
-  for (p <- 0 to 1) {
-    val prs1_exe_spar = uop_prs1_exe_spar(p)
-    val prs2_exe_spar = uop_prs2_exe_spar(p)
-    if (p == 1) {
+  for (o <- 0 to 1) {
+    val prs1_exe_spar = uop_prs1_exe_spar(o)
+    val prs2_exe_spar = uop_prs2_exe_spar(o)
+    if (o == 1) {
       when(use_cache){
         prs1_exe_spar := cache_rs1_eff
         prs2_exe_spar := cache_rs2_eff
@@ -247,16 +247,16 @@ class Mulv2ExeUnit(
 
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
-        non_spar_table(p)(i)(j) := (prs1_exe_spar > i.U && prs2_exe_spar > j.U)
-        if (p == 1) {
+        non_spar_table(o)(i)(j) := (prs1_exe_spar > i.U && prs2_exe_spar > j.U)
+        if (o == 1) {
           if (i < 2) {
             when(use_cache){
-              non_spar_table(p)(i)(j) := false.B
+              non_spar_table(o)(i)(j) := false.B
             }
           }
           else if (i == 3 & j < 2) {
             when(use_cache && cache_rs1_eff === 3.U){
-              non_spar_table(p)(i)(j) := false.B
+              non_spar_table(o)(i)(j) := false.B
             }
           }
         }
@@ -273,14 +273,14 @@ class Mulv2ExeUnit(
   val in = mul_array.io.in
   val out = 0.U asTypeOf Vec(8, SInt(128.W))
   var mul_ind = 0.U(4.W)
-  for (p <- 0 to 1) {
+  for (o <- 0 to 1) {
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
-        when(non_spar_table(p)(i)(j) && mul_ind < 8.U) {
-          in(mul_ind) := rs_pairs(p)(i)(j)
+        when(non_spar_table(o)(i)(j) && mul_ind < 8.U) {
+          in(mul_ind) := rs_pairs(o)(i)(j)
           out(mul_ind) := mul_array.io.out(mul_ind) << ((i + j) * 16).U
         }
-        mul_ind = Mux(non_spar_table(p)(i)(j) && mul_ind < 8.U, mul_ind + 1.U, mul_ind)
+        mul_ind = Mux(non_spar_table(o)(i)(j) && mul_ind < 8.U, mul_ind + 1.U, mul_ind)
       }
     }
   }
@@ -296,8 +296,8 @@ class Mulv2ExeUnit(
     add_out(1) := add_array.io.out(1) + cache_rst_data
   }
   val muxed = Wire(Vec(2, UInt(64.W)))
-  for (p <- 0 to 1) {
-    muxed(p) := Mux(cmdHi(p), add_out(p)(2*64-1, 64), Mux(cmdHalf(p), add_out(p)(32-1, 0).sextTo(64), add_out(p)(64-1, 0)))
+  for (o <- 0 to 1) {
+    muxed(o) := Mux(cmdHi(o), add_out(o)(2*64-1, 64), Mux(cmdHalf(o), add_out(o)(32-1, 0).sextTo(64), add_out(o)(64-1, 0)))
   }
 
   val iresp_valid = Reg(Vec(2, Bool()))
@@ -324,42 +324,42 @@ class Mulv2ExeUnit(
   io.wp(1).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(1).brupdate, iresp_uop(1))
   io.wp(1).iresp.bits.data := iresp_data(1)
 
-  for (p <- 0 to 1) {
+  for (o <- 0 to 1) {
     val alu = Module(new ALUUnit(isJmpUnit = false,
                                  numStages = 1,
                                  dataWidth = xLen))
 
     alu.io.req.valid := (
-      io.rp(p).req.valid &&
-        (io.rp(p).req.bits.uop.fu_code === FU_ALU ||
-          io.rp(p).req.bits.uop.fu_code === FU_JMP ||
-          (io.rp(p).req.bits.uop.fu_code === FU_CSR && io.rp(p).req.bits.uop.uopc =/= uopROCC)))
+      io.rp(o).req.valid &&
+        (io.rp(o).req.bits.uop.fu_code === FU_ALU ||
+          io.rp(o).req.bits.uop.fu_code === FU_JMP ||
+          (io.rp(o).req.bits.uop.fu_code === FU_CSR && io.rp(o).req.bits.uop.uopc =/= uopROCC)))
     //ROCC Rocc Commands are taken by the RoCC unit
 
-    alu.io.req.bits.uop := io.rp(p).req.bits.uop
-    alu.io.req.bits.kill := io.rp(p).req.bits.kill
-    alu.io.req.bits.rs1_data := io.rp(p).req.bits.rs1_data
-    alu.io.req.bits.rs2_data := io.rp(p).req.bits.rs2_data
+    alu.io.req.bits.uop := io.rp(o).req.bits.uop
+    alu.io.req.bits.kill := io.rp(o).req.bits.kill
+    alu.io.req.bits.rs1_data := io.rp(o).req.bits.rs1_data
+    alu.io.req.bits.rs2_data := io.rp(o).req.bits.rs2_data
     alu.io.req.bits.rs3_data := DontCare
-    alu.io.req.bits.pred_data := io.rp(p).req.bits.pred_data
+    alu.io.req.bits.pred_data := io.rp(o).req.bits.pred_data
     alu.io.resp.ready := DontCare
-    alu.io.brupdate := io.rp(p).brupdate
+    alu.io.brupdate := io.rp(o).brupdate
 
     // Bypassing only applies to ALU
-    io.bypass(p) := alu.io.bypass
+    io.bypass(o) := alu.io.bypass
 
     // branch unit is embedded inside the ALU
-    io.brinfo(p) := alu.io.brinfo
+    io.brinfo(o) := alu.io.brinfo
 
     when(alu.io.resp.valid){
-      io.wp(p).iresp.valid     := alu.io.resp.valid
-      io.wp(p).iresp.bits.uop  := alu.io.resp.bits.uop
-      io.wp(p).iresp.bits.data := alu.io.resp.bits.data
-      io.wp(p).iresp.bits.predicated := alu.io.resp.bits.predicated
+      io.wp(o).iresp.valid     := alu.io.resp.valid
+      io.wp(o).iresp.bits.uop  := alu.io.resp.bits.uop
+      io.wp(o).iresp.bits.data := alu.io.resp.bits.data
+      io.wp(o).iresp.bits.predicated := alu.io.resp.bits.predicated
     }
 
-    io.wp(p).iresp.bits.uop.csr_addr := ImmGen(alu.io.resp.bits.uop.imm_packed, IS_I).asUInt
-    io.wp(p).iresp.bits.uop.ctrl.csr_cmd := alu.io.resp.bits.uop.ctrl.csr_cmd
+    io.wp(o).iresp.bits.uop.csr_addr := ImmGen(alu.io.resp.bits.uop.imm_packed, IS_I).asUInt
+    io.wp(o).iresp.bits.uop.ctrl.csr_cmd := alu.io.resp.bits.uop.ctrl.csr_cmd
   }
 
 }
