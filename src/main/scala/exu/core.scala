@@ -89,7 +89,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   val numLlIrfWritePorts      = exe_units.numLlIrfWritePorts
   val numIrfReadPorts         = exe_units.numIrfReadPorts
 
-  val numFastWakeupPorts      = exe_units.count(_.bypassable)
+  val numFastWakeupPorts      = exe_units.count(_.bypassable) + (if(exe_units.mp_mul_unit.hasAlu) 2 else 0)
   val numAlwaysBypassable     = exe_units.count(_.alwaysBypassable)
 
   val numIntIssueWakeupPorts  = numIrfWritePorts + 2 * numFastWakeupPorts - numAlwaysBypassable + (if(exe_units.mp_mul_unit.hasAlu) 2 else 0) // + memWidth for ll_wb
@@ -888,6 +888,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   for (i <- 0 until exe_units.mplength) {
     if (exe_units.mpapply(i).numWritePort != 0) {
       for (j <- 0 until exe_units.mpapply(i).numWritePort) {
+        val fast_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
         val slow_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
         val mid_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
         slow_wakeup := DontCare
@@ -911,15 +912,31 @@ class BoomCore(implicit p: Parameters) extends BoomModule
           exe_units.mpapply(i).io.bypass(0).bits.uop.dst_rtype === RT_FIX &&
           exe_units.mpapply(i).io.bypass(0).bits.uop.ldst_val
 
+        // Fast Wakeup (uses just-issued uops that have known latencies)
+        fast_wakeup.bits.uop := iss_uops(exe_units.length + i)
+        fast_wakeup.valid    := iss_valids(exe_units.length + i) &&
+          iss_uops(exe_units.length + i).bypassable &&
+          iss_uops(exe_units.length + i).dst_rtype === RT_FIX &&
+          iss_uops(exe_units.length + i).ldst_val &&
+          !(io.lsu.ld_miss && (iss_uops(exe_units.length + i).iw_p1_poisoned || iss_uops(exe_units.length + i).iw_p2_poisoned))
+        fast_wakeup.bits.uop.pdst_spar := 0.U(4.W).asBools()
+
         int_iss_wakeups(iss_wu_idx) := slow_wakeup
         iss_wu_idx += 1
-        int_iss_wakeups(iss_wu_idx) := mid_wakeup
-        iss_wu_idx += 1
-
+        if (exe_units.mp_mul_unit.hasAlu) {
+          int_iss_wakeups(iss_wu_idx) := mid_wakeup
+          iss_wu_idx += 1
+          int_iss_wakeups(iss_wu_idx) := fast_wakeup
+          iss_wu_idx += 1
+        }
         int_ren_wakeups(ren_wu_idx) := slow_wakeup
         ren_wu_idx += 1
-        int_ren_wakeups(ren_wu_idx) := mid_wakeup
-        ren_wu_idx += 1
+        if (exe_units.mp_mul_unit.hasAlu) {
+          int_ren_wakeups(ren_wu_idx) := mid_wakeup
+          ren_wu_idx += 1
+          int_ren_wakeups(ren_wu_idx) := fast_wakeup
+          ren_wu_idx += 1
+        }
       }
     }
   }
