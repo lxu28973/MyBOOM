@@ -92,7 +92,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   val numFastWakeupPorts      = exe_units.count(_.bypassable) + (if(exe_units.mp_mul_unit.hasAlu) 2 else 0)
   val numAlwaysBypassable     = exe_units.count(_.alwaysBypassable)
 
-  val numIntIssueWakeupPorts  = numIrfWritePorts + 2 * numFastWakeupPorts - numAlwaysBypassable + (if(exe_units.mp_mul_unit.hasAlu) 2 else 0) // + memWidth for ll_wb
+  val numIntIssueWakeupPorts  = numIrfWritePorts + 2 * numFastWakeupPorts - numAlwaysBypassable // + memWidth for ll_wb
   val numIntRenameWakeupPorts = numIntIssueWakeupPorts
   val numFpWakeupPorts        = if (usingFPU) fp_pipeline.io.wakeups.length else 0
 
