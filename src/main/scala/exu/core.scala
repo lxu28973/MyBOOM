@@ -907,19 +907,19 @@ class BoomCore(implicit p: Parameters) extends BoomModule
           resp.bits.uop.dst_rtype === RT_FIX
 
         // Middle Wakeup (use first bypass port)
-        mid_wakeup.bits.uop := exe_units.mpapply(i).io.bypass(0).bits.uop
-        mid_wakeup.valid := exe_units.mpapply(i).io.bypass(0).valid &&
-          exe_units.mpapply(i).io.bypass(0).bits.uop.bypassable &&
-          exe_units.mpapply(i).io.bypass(0).bits.uop.dst_rtype === RT_FIX &&
-          exe_units.mpapply(i).io.bypass(0).bits.uop.ldst_val
+        mid_wakeup.bits.uop := exe_units.mpapply(i).io.bypass(j).bits.uop
+        mid_wakeup.valid := exe_units.mpapply(i).io.bypass(j).valid &&
+          exe_units.mpapply(i).io.bypass(j).bits.uop.bypassable &&
+          exe_units.mpapply(i).io.bypass(j).bits.uop.dst_rtype === RT_FIX &&
+          exe_units.mpapply(i).io.bypass(j).bits.uop.ldst_val
 
         // Fast Wakeup (uses just-issued uops that have known latencies)
-        fast_wakeup.bits.uop := iss_uops(exe_units.length + i)
-        fast_wakeup.valid    := iss_valids(exe_units.length + i) &&
-          iss_uops(exe_units.length + i).bypassable &&
-          iss_uops(exe_units.length + i).dst_rtype === RT_FIX &&
-          iss_uops(exe_units.length + i).ldst_val &&
-          !(io.lsu.ld_miss && (iss_uops(exe_units.length + i).iw_p1_poisoned || iss_uops(exe_units.length + i).iw_p2_poisoned))
+        fast_wakeup.bits.uop := iss_uops(exe_units.length + j)
+        fast_wakeup.valid    := iss_valids(exe_units.length + j) &&
+          iss_uops(exe_units.length + j).bypassable &&
+          iss_uops(exe_units.length + j).dst_rtype === RT_FIX &&
+          iss_uops(exe_units.length + j).ldst_val &&
+          !(io.lsu.ld_miss && (iss_uops(exe_units.length + j).iw_p1_poisoned || iss_uops(exe_units.length + j).iw_p2_poisoned))
         fast_wakeup.bits.uop.pdst_spar := 0.U(4.W).asBools()
 
         int_iss_wakeups(iss_wu_idx) := slow_wakeup
