@@ -346,7 +346,7 @@ class Mulv2ExeUnit(
     alu.io.brupdate := io.rp(o).brupdate
 
     // Bypassing only applies to ALU
-    io.bypass(o) := alu.io.bypass
+    io.bypass(o) := alu.io.bypass(0)
 
     // branch unit is embedded inside the ALU
     io.brinfo(o) := alu.io.brinfo
