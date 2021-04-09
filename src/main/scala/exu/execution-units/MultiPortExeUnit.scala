@@ -53,8 +53,8 @@ class MultiPortExeUnit(
     io.rp(i).fu_types := Mux(io.rp(i).req.ready, FU_MUL, 0.U)
     uop_prs1_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs1_spar.map(!_)), 0.U)
     uop_prs2_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs2_spar.map(!_)), 0.U)
-    uop_prs1_non_spar(i) := Mux(io.rp(i).req.valid, io.rp(i).req.bits.uop.prs1_spar.map(!_), 0.U asTypeOf Vec(4, Bool()))
-    uop_prs2_non_spar(i) := Mux(io.rp(i).req.valid, io.rp(i).req.bits.uop.prs2_spar.map(!_), 0.U asTypeOf Vec(4, Bool()))
+    uop_prs1_non_spar(i) := Mux(io.rp(i).req.valid, VecInit(io.rp(i).req.bits.uop.prs1_spar.map(!_)), VecInit(Seq.fill(4)(false.B)))
+    uop_prs2_non_spar(i) := Mux(io.rp(i).req.valid, VecInit(io.rp(i).req.bits.uop.prs2_spar.map(!_)), VecInit(Seq.fill(4)(false.B)))
   }
 
   def supportedFuncUnits = {
