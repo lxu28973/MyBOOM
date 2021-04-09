@@ -233,13 +233,13 @@ class Mulv2ExeUnit(
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
         when(non_spar_num < 8.U){
-          non_spar_table(p)(i)(j) := (prs1_non_spar(i)(j) && prs2_non_spar(i)(j))
+          non_spar_table(p)(i)(j) := (prs1_non_spar(i) && prs2_non_spar(j))
           cache_non_spar_table(p)(i)(j) := false.B
         }.otherwise{
           non_spar_table(p)(i)(j) := false.B
-          cache_non_spar_table(p)(i)(j) := (prs1_non_spar(i)(j) && prs2_non_spar(i)(j))
+          cache_non_spar_table(p)(i)(j) := (prs1_non_spar(i) && prs2_non_spar(j))
         }
-        non_spar_num = Mux(prs1_non_spar(i)(j) && prs2_non_spar(i)(j), non_spar_num + 1.U, non_spar_num)
+        non_spar_num = Mux(prs1_non_spar(i) && prs2_non_spar(j), non_spar_num + 1.U, non_spar_num)
       }
     }
   }
