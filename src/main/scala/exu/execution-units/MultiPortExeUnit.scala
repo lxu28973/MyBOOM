@@ -142,8 +142,8 @@ class Mulv2ExeUnit(
   val r_uops   = Reg(new MicroOp)
 
   val rs_pairs = Wire(Vec(2, Vec(4, Vec(4, new RsPair(dataWidth)))))
-  val p1_need_mul = Mux(io.rp(0).req.valid, uop_prs1_exe_spar(0) * uop_prs2_exe_spar(0), 0.U)
-  val p2_need_mul = Mux(io.rp(1).req.valid, uop_prs1_exe_spar(1) * uop_prs2_exe_spar(1), 0.U)
+  val p1_need_mul = Mux(io.rp(0).req.valid && io.rp(0).req.bits.uop.fu_code_is(FU_MUL), uop_prs1_exe_spar(0) * uop_prs2_exe_spar(0), 0.U)
+  val p2_need_mul = Mux(io.rp(1).req.valid && io.rp(0).req.bits.uop.fu_code_is(FU_MUL), uop_prs1_exe_spar(1) * uop_prs2_exe_spar(1), 0.U)
   val p1_need_2cycles = p1_need_mul > 8.U
   val p2_need_2cycles = p2_need_mul > 8.U
   val need_2cycles = p1_need_2cycles || p2_need_2cycles
