@@ -30,12 +30,15 @@ class MultiPortExeUnitIOw(val dataWidth: Int)(implicit p: Parameters) extends Bo
 class MultiPortExeUnit(
                   val dataWidth: Int,
                   val numReadPort: Int,
-                  val numWritePort: Int
+                  val numWritePort: Int,
+                  val hasAlu: Boolean
                 )(implicit p: Parameters) extends BoomModule
 {
   val io = IO(new Bundle() {
     val rp = Vec(numReadPort, new MultiPortExeUnitIOr(dataWidth))
     val wp = Vec(numWritePort, new MultiPortExeUnitIOw(dataWidth))
+    val bypass = if (hasAlu) Output(Vec(numWritePort, Valid(new ExeUnitResp(dataWidth)))) else null
+    val brinfo = if (hasAlu) Output(Vec(numWritePort, new BrResolutionInfo())) else null
   })
 
   for (i <- 0 until numWritePort){
@@ -50,7 +53,7 @@ class MultiPortExeUnit(
   val uop_prs1_non_spar = Wire(Vec(numReadPort, Vec(4, Bool())))
   val uop_prs2_non_spar = Wire(Vec(numReadPort, Vec(4, Bool())))
   for (i <- 0 until numReadPort){
-    io.rp(i).fu_types := Mux(io.rp(i).req.ready, FU_MUL, 0.U)
+    io.rp(i).fu_types := Mux(io.rp(i).req.ready, FU_MUL | FU_ALU, 0.U)
     uop_prs1_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs1_spar.map(!_)), 0.U)
     uop_prs2_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs2_spar.map(!_)), 0.U)
     uop_prs1_non_spar(i) := Mux(io.rp(i).req.valid, VecInit(io.rp(i).req.bits.uop.prs1_spar.map(!_)), VecInit(Seq.fill(4)(false.B)))
@@ -59,7 +62,7 @@ class MultiPortExeUnit(
 
   def supportedFuncUnits = {
     new SupportedFuncUnits(
-      alu = false,
+      alu = true,
       jmp = false,
       mem = false,
       muld = true,
@@ -128,12 +131,14 @@ class AddArray extends Module {
 class Mulv2ExeUnit(
                   numReadPort: Int = 2,
                   numWritePort: Int = 2,
-                  dataWidth: Int = 64
+                  dataWidth: Int = 64,
+                  hasAlu: Boolean = true
                   )(implicit p: Parameters)
   extends MultiPortExeUnit(
     dataWidth = dataWidth,
     numReadPort = numReadPort,
-    numWritePort = numWritePort
+    numWritePort = numWritePort,
+    hasAlu = hasAlu
   )
 {
 
@@ -141,8 +146,8 @@ class Mulv2ExeUnit(
   val r_uops   = Reg(new MicroOp)
 
   val rs_pairs = Wire(Vec(2, Vec(4, Vec(4, new RsPair(dataWidth)))))
-  val p1_need_mul = Mux(io.rp(0).req.valid, uop_prs1_exe_spar(0) * uop_prs2_exe_spar(0), 0.U)
-  val p2_need_mul = Mux(io.rp(1).req.valid, uop_prs1_exe_spar(1) * uop_prs2_exe_spar(1), 0.U)
+  val p1_need_mul = Mux(io.rp(0).req.valid && io.rp(0).req.bits.uop.fu_code_is(FU_MUL), uop_prs1_exe_spar(0) * uop_prs2_exe_spar(0), 0.U)
+  val p2_need_mul = Mux(io.rp(1).req.valid && io.rp(0).req.bits.uop.fu_code_is(FU_MUL), uop_prs1_exe_spar(1) * uop_prs2_exe_spar(1), 0.U)
   val p1_need_2cycles = p1_need_mul > 8.U
   val p2_need_2cycles = p2_need_mul > 8.U
   val need_2cycles = p1_need_2cycles || p2_need_2cycles
@@ -177,13 +182,13 @@ class Mulv2ExeUnit(
   val rhsSigned = Wire(Vec(2, Bool()))
   val cmdHalf = Wire(Vec(2, Bool()))
 
-  for (p <- 0 to 1) {
-    io.rp(p).req.ready := true.B
-    val op_fcn   = WireDefault(io.rp(p).req.bits.uop.ctrl.op_fcn)
-    val rs1_data = WireDefault(io.rp(p).req.bits.rs1_data)
-    val rs2_data = WireDefault(io.rp(p).req.bits.rs2_data)
-    val fcn_dw   = WireDefault(io.rp(p).req.bits.uop.ctrl.fcn_dw)
-    if (p == 1) {
+  for (o <- 0 to 1) {
+    io.rp(o).req.ready := true.B
+    val op_fcn   = WireDefault(io.rp(o).req.bits.uop.ctrl.op_fcn)
+    val rs1_data = WireDefault(io.rp(o).req.bits.rs1_data)
+    val rs2_data = WireDefault(io.rp(o).req.bits.rs2_data)
+    val fcn_dw   = WireDefault(io.rp(o).req.bits.uop.ctrl.fcn_dw)
+    if (o == 1) {
       when(use_cache){
         op_fcn := cache_op_fcn
         rs1_data := cache_rs1_data
@@ -200,24 +205,24 @@ class Mulv2ExeUnit(
       DecodeLogic(op_fcn, List(X, X, X), decode).map(_.asBool)
     val cmdHalf_ = (dataWidth > 32).B && fcn_dw === DW_32  // for MULW instruction
 
-    cmdHi(p) := cmdHi_
-    lhsSigned(p) := lhsSigned_
-    rhsSigned(p) := rhsSigned_
-    cmdHalf(p) := cmdHalf_
+    cmdHi(o) := cmdHi_
+    lhsSigned(o) := lhsSigned_
+    rhsSigned(o) := rhsSigned_
+    cmdHalf(o) := cmdHalf_
 
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
         if (i == 3){
-          rs_pairs(p)(i)(j).rs1_data := Cat(lhsSigned_ && rs1_data(dataWidth-1), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+          rs_pairs(o)(i)(j).rs1_data := Cat(lhsSigned_ && rs1_data(dataWidth-1), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
         }
         else {
-          rs_pairs(p)(i)(j).rs1_data := Cat(0.U(1.W), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+          rs_pairs(o)(i)(j).rs1_data := Cat(0.U(1.W), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
         }
         if (j == 3){
-          rs_pairs(p)(i)(j).rs2_data := Cat(rhsSigned_ && rs2_data(dataWidth-1), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+          rs_pairs(o)(i)(j).rs2_data := Cat(rhsSigned_ && rs2_data(dataWidth-1), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
         }
         else {
-          rs_pairs(p)(i)(j).rs2_data := Cat(0.U(1.W), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+          rs_pairs(o)(i)(j).rs2_data := Cat(0.U(1.W), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
         }
       }
     }
@@ -316,18 +321,59 @@ class Mulv2ExeUnit(
   io.wp(1).iresp.bits.uop := iresp_uop(1)
   io.wp(1).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(1).brupdate, iresp_uop(1))
   io.wp(1).iresp.bits.data := iresp_data(1)
+
+  for (o <- 0 to 1) {
+    val alu = Module(new ALUUnit(isJmpUnit = false,
+                                 numStages = 1,
+                                 dataWidth = xLen))
+
+    alu.io.req.valid := (
+      io.rp(o).req.valid &&
+        (io.rp(o).req.bits.uop.fu_code === FU_ALU ||
+          io.rp(o).req.bits.uop.fu_code === FU_JMP ||
+          (io.rp(o).req.bits.uop.fu_code === FU_CSR && io.rp(o).req.bits.uop.uopc =/= uopROCC)))
+    //ROCC Rocc Commands are taken by the RoCC unit
+
+    alu.io.req.bits.uop := io.rp(o).req.bits.uop
+    alu.io.req.bits.kill := io.rp(o).req.bits.kill
+    alu.io.req.bits.rs1_data := io.rp(o).req.bits.rs1_data
+    alu.io.req.bits.rs2_data := io.rp(o).req.bits.rs2_data
+    alu.io.req.bits.rs3_data := DontCare
+    alu.io.req.bits.pred_data := io.rp(o).req.bits.pred_data
+    alu.io.resp.ready := DontCare
+    alu.io.brupdate := io.rp(o).brupdate
+
+    // Bypassing only applies to ALU
+    io.bypass(o) := alu.io.bypass(0)
+
+    // branch unit is embedded inside the ALU
+    io.brinfo(o) := alu.io.brinfo
+
+    when(alu.io.resp.valid){
+      io.wp(o).iresp.valid     := alu.io.resp.valid
+      io.wp(o).iresp.bits.uop  := alu.io.resp.bits.uop
+      io.wp(o).iresp.bits.data := alu.io.resp.bits.data
+      io.wp(o).iresp.bits.predicated := alu.io.resp.bits.predicated
+    }
+
+    io.wp(o).iresp.bits.uop.csr_addr := ImmGen(alu.io.resp.bits.uop.imm_packed, IS_I).asUInt
+    io.wp(o).iresp.bits.uop.ctrl.csr_cmd := alu.io.resp.bits.uop.ctrl.csr_cmd
+  }
+
 }
 
 
 class MulExeUnit(
                 numReadPort: Int = 4,
                 numWritePort: Int = 10,
-                dataWidth: Int = 64
+                dataWidth: Int = 64,
+                hasAlu: Boolean = false
                 )(implicit p: Parameters)
   extends MultiPortExeUnit(
     dataWidth,
     numReadPort,
-    numWritePort
+    numWritePort,
+    hasAlu
   )
 {
 
@@ -513,7 +559,8 @@ class MulExeUnitForTest(
   extends MultiPortExeUnit(
     p(tile.XLen) + 1,
     numReadPort,
-    numWritePort
+    numWritePort,
+    false
   )
 {
   val numStages = 3

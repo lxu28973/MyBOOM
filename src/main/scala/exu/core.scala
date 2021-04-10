@@ -89,7 +89,7 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   val numLlIrfWritePorts      = exe_units.numLlIrfWritePorts
   val numIrfReadPorts         = exe_units.numIrfReadPorts
 
-  val numFastWakeupPorts      = exe_units.count(_.bypassable)
+  val numFastWakeupPorts      = exe_units.count(_.bypassable) + (if(exe_units.mp_mul_unit.hasAlu) 2 else 0)
   val numAlwaysBypassable     = exe_units.count(_.alwaysBypassable)
 
   val numIntIssueWakeupPorts  = numIrfWritePorts + 2 * numFastWakeupPorts - numAlwaysBypassable // + memWidth for ll_wb
@@ -205,6 +205,15 @@ class BoomCore(implicit p: Parameters) extends BoomModule
     b := a.io.brinfo
     b.valid := a.io.brinfo.valid && !rob.io.flush.valid
   }
+  // FIXME: connect brinfo for core width = 4 with multi-port unit, wrong with other config
+  val useMP = true
+  if (useMP) {
+    brinfos(2) := exe_units.mp_mul_unit.io.brinfo(0)
+    brinfos(2).valid := exe_units.mp_mul_unit.io.brinfo(0).valid && !rob.io.flush.valid
+    brinfos(3) := exe_units.mp_mul_unit.io.brinfo(1)
+    brinfos(3).valid := exe_units.mp_mul_unit.io.brinfo(1).valid && !rob.io.flush.valid
+  }
+
   b1.resolve_mask := brinfos.map(x => x.valid << x.uop.br_tag).reduce(_|_)
   b1.mispredict_mask := brinfos.map(x => (x.valid && x.mispredict) << x.uop.br_tag).reduce(_|_)
 
@@ -879,8 +888,12 @@ class BoomCore(implicit p: Parameters) extends BoomModule
   for (i <- 0 until exe_units.mplength) {
     if (exe_units.mpapply(i).numWritePort != 0) {
       for (j <- 0 until exe_units.mpapply(i).numWritePort) {
+        val fast_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
         val slow_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
+        val mid_wakeup = Wire(Valid(new ExeUnitResp(xLen)))
+        fast_wakeup := DontCare
         slow_wakeup := DontCare
+        mid_wakeup := DontCare
 
         val resp = exe_units.mpapply(i).io.wp(j).iresp
         assert(!(resp.valid && resp.bits.uop.rf_wen && resp.bits.uop.dst_rtype =/= RT_FIX))
@@ -893,11 +906,38 @@ class BoomCore(implicit p: Parameters) extends BoomModule
           !resp.bits.uop.bypassable &&
           resp.bits.uop.dst_rtype === RT_FIX
 
+        // Middle Wakeup (use first bypass port)
+        mid_wakeup.bits.uop := exe_units.mpapply(i).io.bypass(j).bits.uop
+        mid_wakeup.valid := exe_units.mpapply(i).io.bypass(j).valid &&
+          exe_units.mpapply(i).io.bypass(j).bits.uop.bypassable &&
+          exe_units.mpapply(i).io.bypass(j).bits.uop.dst_rtype === RT_FIX &&
+          exe_units.mpapply(i).io.bypass(j).bits.uop.ldst_val
+
+        // Fast Wakeup (uses just-issued uops that have known latencies)
+        fast_wakeup.bits.uop := iss_uops(exe_units.length + j)
+        fast_wakeup.valid    := iss_valids(exe_units.length + j) &&
+          iss_uops(exe_units.length + j).bypassable &&
+          iss_uops(exe_units.length + j).dst_rtype === RT_FIX &&
+          iss_uops(exe_units.length + j).ldst_val &&
+          !(io.lsu.ld_miss && (iss_uops(exe_units.length + j).iw_p1_poisoned || iss_uops(exe_units.length + j).iw_p2_poisoned))
+        fast_wakeup.bits.uop.pdst_spar := 0.U(4.W).asBools()
+
         int_iss_wakeups(iss_wu_idx) := slow_wakeup
         iss_wu_idx += 1
-
+        if (exe_units.mp_mul_unit.hasAlu) {
+          int_iss_wakeups(iss_wu_idx) := mid_wakeup
+          iss_wu_idx += 1
+          int_iss_wakeups(iss_wu_idx) := fast_wakeup
+          iss_wu_idx += 1
+        }
         int_ren_wakeups(ren_wu_idx) := slow_wakeup
         ren_wu_idx += 1
+        if (exe_units.mp_mul_unit.hasAlu) {
+          int_ren_wakeups(ren_wu_idx) := mid_wakeup
+          ren_wu_idx += 1
+          int_ren_wakeups(ren_wu_idx) := fast_wakeup
+          ren_wu_idx += 1
+        }
       }
     }
   }
@@ -1168,6 +1208,12 @@ class BoomCore(implicit p: Parameters) extends BoomModule
       for (j <- 0 until exe_unit.numReadPort) {
         exe_unit.io.rp(j).req <> iregister_read.io.exe_reqs(iss_idx)
         iss_idx += 1
+      }
+      if (exe_unit.hasAlu) {
+        for (i <- 0 until exe_unit.numWritePort) {
+          bypasses(bypass_idx) := exe_unit.io.bypass(i)
+          bypass_idx += 1
+        }
       }
     }
   }
