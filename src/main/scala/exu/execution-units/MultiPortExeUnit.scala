@@ -225,7 +225,7 @@ class Mulv2ExeUnit(
   }
   val non_spar_table = Wire(Vec(2, Vec(4, Vec(4, Bool()))))
   val cache_non_spar_table = Reg(Vec(2, Vec(4, Vec(4, Bool()))))
-  var non_spar_num = 0.U
+  var non_spar_num = 0.U(5.W)
   for (p <- 0 to 1) {
     val prs1_non_spar = uop_prs1_non_spar(p)
     val prs2_non_spar = uop_prs2_non_spar(p)
