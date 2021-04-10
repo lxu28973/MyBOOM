@@ -224,7 +224,8 @@ class Mulv2ExeUnit(
 
   }
   val non_spar_table = Wire(Vec(2, Vec(4, Vec(4, Bool()))))
-  val cache_non_spar_table = Reg(Vec(2, Vec(4, Vec(4, Bool()))))
+  val cache_non_spar_table_wire = Wire(Vec(2, Vec(4, Vec(4, Bool()))))
+  val cache_non_spar_table = Reg(Vec(4, Vec(4, Bool())))
   var non_spar_num = 0.U(5.W)
   for (p <- 0 to 1) {
     val prs1_non_spar = uop_prs1_non_spar(p)
@@ -234,13 +235,18 @@ class Mulv2ExeUnit(
       for (j <- 0 until 4) {
         when(non_spar_num < 8.U){
           non_spar_table(p)(i)(j) := (prs1_non_spar(i) && prs2_non_spar(j))
-          cache_non_spar_table(p)(i)(j) := false.B
+          cache_non_spar_table_wire(p)(i)(j) := false.B
         }.otherwise{
           non_spar_table(p)(i)(j) := false.B
-          cache_non_spar_table(p)(i)(j) := (prs1_non_spar(i) && prs2_non_spar(j))
+          cache_non_spar_table_wire(p)(i)(j) := (prs1_non_spar(i) && prs2_non_spar(j))
         }
         non_spar_num = Mux(prs1_non_spar(i) && prs2_non_spar(j), non_spar_num + 1.U, non_spar_num)
       }
+    }
+  }
+  for (i <- 0 until 4) {
+    for (j <- 0 until 4) {
+      cache_non_spar_table(i)(j) := cache_non_spar_table_wire(0)(i)(j) | cache_non_spar_table_wire(1)(i)(j)
     }
   }
 
@@ -258,7 +264,7 @@ class Mulv2ExeUnit(
       for (j <- 0 until 4) {
         val need_mul = Wire(Bool())
         if (p == 1) {
-          need_mul := Mux(use_cache, cache_non_spar_table(p)(i)(j), non_spar_table(p)(i)(j))
+          need_mul := Mux(use_cache, cache_non_spar_table(i)(j), non_spar_table(p)(i)(j))
         } else {
           need_mul := non_spar_table(p)(i)(j)
         }
