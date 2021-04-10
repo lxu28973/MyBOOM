@@ -270,7 +270,7 @@ class Mulv2ExeUnit(
       }
     }
   }
-  assert(mul_ind < 8.U, "use too many muls")
+  assert(mul_ind <= 8.U, "use too many muls")
 
   val add_array = Module(new AddArray)
 
