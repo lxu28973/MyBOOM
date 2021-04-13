@@ -360,6 +360,8 @@ class Mulv2ExeUnit(
     io.wp(o).iresp.bits.uop.ctrl.csr_cmd := alu.io.resp.bits.uop.ctrl.csr_cmd
   }
 
+  for (i <- 0 until numWritePort)
+    io.wp(i).iresp.bits.uop.pdst_spar := VecInit((0 until 4).map(x => (io.wp(i).iresp.bits.data((x+1)*dataWidth/4 -1, x*dataWidth/4) === 0.U)))
 }
 
 
