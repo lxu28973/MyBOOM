@@ -404,6 +404,7 @@ class ALUExeUnit(
       (f.io.resp.valid, f.io.resp.bits.data)))
     io.iresp.bits.predicated := PriorityMux(iresp_fu_units.map(f =>
       (f.io.resp.valid, f.io.resp.bits.predicated)))
+    io.iresp.bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.iresp.bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
 
     // pulled out for critical path reasons
     // TODO: Does this make sense as part of the iresp bundle?
