@@ -393,6 +393,7 @@ class ALUExeUnit(
     if (usingFPU) {
       io.ll_fresp <> io.lsu_io.fresp
     }
+    io.ll_iresp.bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.ll_iresp.bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
   }
 
   // Outputs (Write Port #0)  ---------------
@@ -556,7 +557,7 @@ class FPUExeUnit(
     resp_arb.io.in(0) <> queue.io.deq
     resp_arb.io.in(1) <> fp_sdq.io.deq
     io.ll_iresp       <> resp_arb.io.out
-
+    io.ll_iresp.bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.ll_iresp.bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
     fpiu_busy := !(queue.io.empty && fp_sdq.io.empty)
   }
 
