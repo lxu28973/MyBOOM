@@ -233,8 +233,14 @@ class RegisterRead(
 
     io.exe_reqs(w).valid    := exe_reg_valids(w)
     io.exe_reqs(w).bits.uop := exe_reg_uops(w)
-    if (numReadPorts > 0) io.exe_reqs(w).bits.rs1_data := exe_reg_rs1_data(w)
-    if (numReadPorts > 1) io.exe_reqs(w).bits.rs2_data := exe_reg_rs2_data(w)
+    if (numReadPorts > 0) {
+      io.exe_reqs(w).bits.rs1_data := exe_reg_rs1_data(w)
+      io.exe_reqs(w).bits.uop.prs1_spar := VecInit((0 until 4).map(x => (io.exe_reqs(w).bits.rs1_data((x+1) * registerWidth/4 -1, x * registerWidth/4) === 0.U)))
+    }
+    if (numReadPorts > 1) {
+      io.exe_reqs(w).bits.rs2_data := exe_reg_rs2_data(w)
+      io.exe_reqs(w).bits.uop.prs2_spar := VecInit((0 until 4).map(x => (io.exe_reqs(w).bits.rs2_data((x+1) * registerWidth/4 -1, x * registerWidth/4) === 0.U)))
+    }
     if (numReadPorts > 2) io.exe_reqs(w).bits.rs3_data := exe_reg_rs3_data(w)
     if (enableSFBOpt)     io.exe_reqs(w).bits.pred_data := exe_reg_pred_data(w)
   }
