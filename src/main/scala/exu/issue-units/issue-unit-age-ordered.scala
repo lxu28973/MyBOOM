@@ -121,13 +121,13 @@ class IssueUnitCollapsing(
     iss_is_fu_mul(w) := false.B
     iss_need_muls(w) := 0.U
     iss_mul_need_2_cycle(w) := false.B
-  }
-  for (w <- 0 until(issueWidth - 1)) {
-    free_muls(w+1) := Mux(io.iss_valids(w) && iss_is_fu_mul(w), Mux(iss_mul_need_2_cycle(w), 0.U, free_muls(w) - iss_need_muls(w)), free_muls(w))
     when(iss_is_fu_mul(w) && iss_mul_need_2_cycle(w)){
       need_wait := true.B
       next_free_muls := free_muls(w) * 2.U - iss_need_muls(w)
     }
+  }
+  for (w <- 0 until(issueWidth - 1)) {
+    free_muls(w+1) := Mux(io.iss_valids(w) && iss_is_fu_mul(w), Mux(iss_mul_need_2_cycle(w), 0.U, free_muls(w) - iss_need_muls(w)), free_muls(w))
   }
 
   // TODO: Adding the lower priority of no sparsity
