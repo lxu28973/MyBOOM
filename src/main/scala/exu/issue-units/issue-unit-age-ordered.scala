@@ -134,7 +134,9 @@ class IssueUnitCollapsing(
   for (i <- 0 until numIssueSlots) {    // allow issue queue have internal vacant
     issue_slots(i).grant := false.B
     var uop_issued = false.B    // CAUTION: var, uop_issued = a | uop_issued, first uop_issued and second uop_issued are not the same
-    val need_muls = PopCount(issue_slots(i).uop.prs1_spar.map(!_)) * PopCount(issue_slots(i).uop.prs2_spar.map(!_))   // FIXME: this is only for mul, not support packed mul
+    val need_muls = Mux(issue_slots(i).uop.uopc === uopMULAC, (0 to 1).map(n => (!issue_slots(i).uop.prs1_spar(2*n+0) +& !issue_slots(i).uop.prs1_spar(2*n+1))
+      * (!issue_slots(i).uop.prs2_spar(2*n+0) +& !issue_slots(i).uop.prs2_spar(2*n+1))).reduce(_+&_),
+                        PopCount(issue_slots(i).uop.prs1_spar.map(!_)) * PopCount(issue_slots(i).uop.prs2_spar.map(!_)))
     val mul_need_2_cycle = need_muls > 8.U
 //    val no_spar = issue_slots(i).uop.prs1_spar.asUInt === 0.U && issue_slots(i).uop.prs2_spar.asUInt === 0.U
     for (w <- 0 until issueWidth) {

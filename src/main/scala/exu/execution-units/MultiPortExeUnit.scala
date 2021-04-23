@@ -13,7 +13,7 @@ import boom.common._
 import boom.ifu.GetPCFromFtqIO
 import boom.util.{BoomCoreStringPrefix, BranchKillableQueue, GetNewBrMask, ImmGen, IsKilledByBranch, spar2ExeSpar}
 import freechips.rocketchip.util.UIntToAugmentedUInt
-import freechips.rocketchip.rocket.ALU.{FN_MUL, FN_MULH, FN_MULHSU, FN_MULHU}
+import freechips.rocketchip.rocket.ALU.{FN_MUL, FN_MULAC, FN_MULH, FN_MULHSU, FN_MULHU}
 import freechips.rocketchip.rocket.{BP, DecodeLogic, N, PipelinedMultiplier, X, Y}
 
 
@@ -50,12 +50,18 @@ class MultiPortExeUnit(
 
   val uop_prs1_exe_spar = Wire(Vec(numReadPort, UInt(3.W)))
   val uop_prs2_exe_spar = Wire(Vec(numReadPort, UInt(3.W)))
+  val packed_need_mul = Wire(Vec(numReadPort, UInt(5.W)))
+  val is_packed = Wire(Vec(numReadPort, Bool()))
   val uop_prs1_non_spar = Wire(Vec(numReadPort, Vec(4, Bool())))
   val uop_prs2_non_spar = Wire(Vec(numReadPort, Vec(4, Bool())))
   for (i <- 0 until numReadPort){
     io.rp(i).fu_types := Mux(io.rp(i).req.ready, FU_MUL | FU_ALU, 0.U)
     uop_prs1_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs1_spar.map(!_)), 0.U)
     uop_prs2_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs2_spar.map(!_)), 0.U)
+    packed_need_mul(i) := Mux(io.rp(i).req.valid,
+                              (0 to 1).map(n => (0 to 1).map(m => !io.rp(i).req.bits.uop.prs1_spar(m+2*n)).reduce(_+&_) * (0 to 1).map(m => !io.rp(i).req.bits.uop.prs2_spar(m+2*n)).reduce(_+&_)).reduce(_+_),
+                              0.U)
+    is_packed(i) := io.rp(i).req.valid && (io.rp(i).req.bits.uop.uopc === uopMULAC)
     uop_prs1_non_spar(i) := Mux(io.rp(i).req.valid & io.rp(i).req.bits.uop.fu_code_is(FU_MUL), VecInit(io.rp(i).req.bits.uop.prs1_spar.map(!_)), VecInit(Seq.fill(4)(false.B)))
     uop_prs2_non_spar(i) := Mux(io.rp(i).req.valid & io.rp(i).req.bits.uop.fu_code_is(FU_MUL), VecInit(io.rp(i).req.bits.uop.prs2_spar.map(!_)), VecInit(Seq.fill(4)(false.B)))
   }
@@ -146,8 +152,12 @@ class Mulv2ExeUnit(
   val r_uops   = Reg(new MicroOp)
 
   val rs_pairs = Wire(Vec(2, Vec(4, Vec(4, new RsPair(dataWidth)))))
-  val p1_need_mul = Mux(io.rp(0).req.valid && io.rp(0).req.bits.uop.fu_code_is(FU_MUL), uop_prs1_exe_spar(0) * uop_prs2_exe_spar(0), 0.U)
-  val p2_need_mul = Mux(io.rp(1).req.valid && io.rp(0).req.bits.uop.fu_code_is(FU_MUL), uop_prs1_exe_spar(1) * uop_prs2_exe_spar(1), 0.U)
+  val p1_need_mul = Mux(io.rp(0).req.valid && io.rp(0).req.bits.uop.fu_code_is(FU_MUL),
+                        Mux(io.rp(0).req.bits.uop.uopc === uopMULAC, packed_need_mul(0), uop_prs1_exe_spar(0) * uop_prs2_exe_spar(0)),
+                        0.U)
+  val p2_need_mul = Mux(io.rp(1).req.valid && io.rp(1).req.bits.uop.fu_code_is(FU_MUL),
+                        Mux(io.rp(1).req.bits.uop.uopc === uopMULAC, packed_need_mul(1), uop_prs1_exe_spar(1) * uop_prs2_exe_spar(1)),
+                        0.U)
   val p1_need_2cycles = p1_need_mul > 8.U
   val p2_need_2cycles = p2_need_mul > 8.U
   val need_2cycles = p1_need_2cycles || p2_need_2cycles
@@ -196,11 +206,13 @@ class Mulv2ExeUnit(
         fcn_dw := r_uops.ctrl.fcn_dw
       }
     }
+    val is_mac = op_fcn === FN_MULAC
     val decode = List(
       FN_MUL    -> List(N, X, X),
       FN_MULH   -> List(Y, Y, Y),
       FN_MULHU  -> List(Y, N, N),
-      FN_MULHSU -> List(Y, Y, N))
+      FN_MULHSU -> List(Y, Y, N),
+      FN_MULAC  -> List(N, X, X))
     val cmdHi_ :: lhsSigned_ :: rhsSigned_ :: Nil =
       DecodeLogic(op_fcn, List(X, X, X), decode).map(_.asBool)
     val cmdHalf_ = (dataWidth > 32).B && fcn_dw === DW_32  // for MULW instruction
@@ -215,11 +227,26 @@ class Mulv2ExeUnit(
         if (i == 3){
           rs_pairs(o)(i)(j).rs1_data := Cat(lhsSigned_ && rs1_data(dataWidth-1), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
         }
+        else if (i == 1){
+          when(is_mac){
+            rs_pairs(o)(i)(j).rs1_data := Cat(lhsSigned_ && rs1_data(dataWidth-1), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+          }.otherwise {
+            rs_pairs(o)(i)(j).rs1_data := Cat(0.U(1.W), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+          }
+        }
         else {
           rs_pairs(o)(i)(j).rs1_data := Cat(0.U(1.W), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
         }
+
         if (j == 3){
           rs_pairs(o)(i)(j).rs2_data := Cat(rhsSigned_ && rs2_data(dataWidth-1), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+        }
+        else if (j == 1){
+          when(is_mac){
+            rs_pairs(o)(i)(j).rs2_data := Cat(rhsSigned_ && rs2_data(dataWidth-1), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+          }.otherwise {
+            rs_pairs(o)(i)(j).rs2_data := Cat(0.U(1.W), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+          }
         }
         else {
           rs_pairs(o)(i)(j).rs2_data := Cat(0.U(1.W), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
@@ -238,14 +265,21 @@ class Mulv2ExeUnit(
 
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
+        val non_spar = prs1_non_spar(i) && prs2_non_spar(j)
+        val non_spar_to_table = Wire(Bool())
+        if ((i < 2 && j < 2) || (i > 1 && j > 1)) {
+          non_spar_to_table := non_spar
+        } else {
+          non_spar_to_table := Mux(is_packed(p), false.B, non_spar)
+        }
         when(non_spar_num < 8.U){
-          non_spar_table(p)(i)(j) := (prs1_non_spar(i) && prs2_non_spar(j))
+          non_spar_table(p)(i)(j) := (non_spar_to_table)
           cache_non_spar_table_wire(p)(i)(j) := false.B
         }.otherwise{
           non_spar_table(p)(i)(j) := false.B
-          cache_non_spar_table_wire(p)(i)(j) := (prs1_non_spar(i) && prs2_non_spar(j))
+          cache_non_spar_table_wire(p)(i)(j) := (non_spar_to_table)
         }
-        non_spar_num = Mux(prs1_non_spar(i) && prs2_non_spar(j), non_spar_num + 1.U, non_spar_num)
+        non_spar_num = Mux(non_spar_to_table, non_spar_num + 1.U, non_spar_num)
       }
     }
   }
@@ -275,7 +309,11 @@ class Mulv2ExeUnit(
         }
         when(need_mul) {
           in(mul_ind) := rs_pairs(p)(i)(j)
-          out(mul_ind) := mul_array.io.out(mul_ind) << ((i + j) * 16).U
+          when(is_packed(p)){
+            out(mul_ind) := mul_array.io.out(mul_ind) << ((i%2 + j%2) * 16).U
+          }.otherwise{
+            out(mul_ind) := mul_array.io.out(mul_ind) << ((i + j) * 16).U
+          }
         }
         mul_ind = Mux(need_mul, mul_ind + 1.U, mul_ind)
       }
