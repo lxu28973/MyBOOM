@@ -59,7 +59,7 @@ class MultiPortExeUnit(
     uop_prs1_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs1_spar.map(!_)), 0.U)
     uop_prs2_exe_spar(i) := Mux(io.rp(i).req.valid, PopCount(io.rp(i).req.bits.uop.prs2_spar.map(!_)), 0.U)
     packed_need_mul(i) := Mux(io.rp(i).req.valid,
-                              (0 to 1).map(n => (0 to 1).map(m => !io.rp(i).req.bits.uop.prs1_spar(m+2*n)).reduce(_+&_) * (0 to 1).map(m => !io.rp(i).req.bits.uop.prs2_spar(m+2*n)).reduce(_+&_)).reduce(_+_),
+                              (0 to 1).map(n => ((0 to 1).map(m => (!io.rp(i).req.bits.uop.prs1_spar(m+2*n)).asUInt).reduce(_+&_) * (0 to 1).map(m => (!io.rp(i).req.bits.uop.prs2_spar(m+2*n)).asUInt).reduce(_+&_))).reduce(_+&_),
                               0.U)
     is_packed(i) := io.rp(i).req.valid && (io.rp(i).req.bits.uop.uopc === uopMULAC)
     uop_prs1_non_spar(i) := Mux(io.rp(i).req.valid & io.rp(i).req.bits.uop.fu_code_is(FU_MUL), VecInit(io.rp(i).req.bits.uop.prs1_spar.map(!_)), VecInit(Seq.fill(4)(false.B)))
