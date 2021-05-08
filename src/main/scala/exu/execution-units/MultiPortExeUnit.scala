@@ -335,8 +335,10 @@ class Mulv2ExeUnit(
     add_out(1) := add_array.io.out(1) + cache_rst_data
   }
   val muxed = Wire(Vec(2, UInt(64.W)))
+  val cmdHi_reg = RegNext(cmdHi)
+  val cmdHalf_reg = RegNext(cmdHalf)
   for (p <- 0 to 1) {
-    muxed(p) := Mux(cmdHi(p), add_out(p)(2*64-1, 64), Mux(cmdHalf(p), add_out(p)(32-1, 0).sextTo(64), add_out(p)(64-1, 0)))
+    muxed(p) := Mux(cmdHi_reg(p), add_out(p)(2*64-1, 64), Mux(cmdHalf_reg(p), add_out(p)(32-1, 0).sextTo(64), add_out(p)(64-1, 0)))
   }
 
   val iresp_valid = Reg(Vec(2, (Vec(2, Bool()))))
