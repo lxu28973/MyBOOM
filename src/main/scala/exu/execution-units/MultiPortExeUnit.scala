@@ -338,8 +338,8 @@ class Mulv2ExeUnit(
     muxed(p) := Mux(cmdHi(p), add_out(p)(2*64-1, 64), Mux(cmdHalf(p), add_out(p)(32-1, 0).sextTo(64), add_out(p)(64-1, 0)))
   }
 
-  val iresp_valid = Vec(2, Reg(Vec(2, Bool())))
-  val iresp_uop = Vec(2, Reg(Vec(2, new MicroOp)))
+  val iresp_valid = Reg(Vec(2, (Vec(2, Bool()))))
+  val iresp_uop = Reg(Vec(2, (Vec(2, new MicroOp))))
 
   iresp_valid(0)(0) := Mux(p1_need_2cycles, false.B, io.rp(0).req.valid && !IsKilledByBranch(io.rp(0).brupdate, io.rp(0).req.bits.uop) && !io.rp(0).req.bits.kill)
   iresp_uop(0)(0) := io.rp(0).req.bits.uop
