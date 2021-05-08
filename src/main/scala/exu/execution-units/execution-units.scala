@@ -205,7 +205,7 @@ class ExecutionUnits(val fpu: Boolean)(implicit val p: Parameters) extends HasBo
   val numIrfReadPorts     = exe_units.count(_.readsIrf) * 2 + multi_port_units.map(_.numReadPort).sum * 2
   val numIrfWritePorts    = exe_units.count(_.writesIrf) + multi_port_units.map(_.numWritePort).sum
   val numLlIrfWritePorts  = exe_units.count(_.writesLlIrf)
-  val numTotalBypassPorts = exe_units.withFilter(_.bypassable).map(_.numBypassStages).foldLeft(0)(_+_) + multi_port_units.map(_.numWritePort).sum
+  val numTotalBypassPorts = exe_units.withFilter(_.bypassable).map(_.numBypassStages).foldLeft(0)(_+_) + multi_port_units.map(_.numWritePort*2).sum
 
   val numFrfReaders       = exe_units.count(_.readsFrf)
   val numFrfReadPorts     = exe_units.count(_.readsFrf) * 3

@@ -37,7 +37,7 @@ class MultiPortExeUnit(
   val io = IO(new Bundle() {
     val rp = Vec(numReadPort, new MultiPortExeUnitIOr(dataWidth))
     val wp = Vec(numWritePort, new MultiPortExeUnitIOw(dataWidth))
-    val bypass = if (hasAlu) Output(Vec(numWritePort, Valid(new ExeUnitResp(dataWidth)))) else null
+    val bypass = if (hasAlu) Output(Vec(numWritePort, Vec(2, Valid(new ExeUnitResp(dataWidth))))) else null
     val brinfo = if (hasAlu) Output(Vec(numWritePort, new BrResolutionInfo())) else null
   })
 
@@ -323,8 +323,10 @@ class Mulv2ExeUnit(
 
   val add_array = Module(new AddArray)
 
-  add_array.io.in := out
-  add_array.io.ctl := p1_need_mul
+  val out_reg = RegNext(out)
+  val ctl_reg = RegNext(p1_need_mul)
+  add_array.io.in := out_reg
+  add_array.io.ctl := ctl_reg
   cache_rst_data := add_array.io.cache_out
 
   val add_out = WireDefault(add_array.io.out)
@@ -336,33 +338,42 @@ class Mulv2ExeUnit(
     muxed(p) := Mux(cmdHi(p), add_out(p)(2*64-1, 64), Mux(cmdHalf(p), add_out(p)(32-1, 0).sextTo(64), add_out(p)(64-1, 0)))
   }
 
-  val iresp_valid = Reg(Vec(2, Bool()))
-  val iresp_uop = Reg(Vec(2, new MicroOp))
-  val iresp_data = Reg(Vec(2, UInt(64.W)))
+  val iresp_valid = Vec(2, Reg(Vec(2, Bool())))
+  val iresp_uop = Vec(2, Reg(Vec(2, new MicroOp)))
 
-  iresp_valid(0) := Mux(p1_need_2cycles, false.B, io.rp(0).req.valid && !IsKilledByBranch(io.rp(0).brupdate, io.rp(0).req.bits.uop) && !io.rp(0).req.bits.kill)
-  iresp_uop(0) := io.rp(0).req.bits.uop
-  iresp_uop(0).br_mask := GetNewBrMask(io.rp(0).brupdate, io.rp(0).req.bits.uop)
+  iresp_valid(0)(0) := Mux(p1_need_2cycles, false.B, io.rp(0).req.valid && !IsKilledByBranch(io.rp(0).brupdate, io.rp(0).req.bits.uop) && !io.rp(0).req.bits.kill)
+  iresp_uop(0)(0) := io.rp(0).req.bits.uop
+  iresp_uop(0)(0).br_mask := GetNewBrMask(io.rp(0).brupdate, io.rp(0).req.bits.uop)
+  iresp_valid(0)(1) := Mux(p2_need_2cycles, false.B, Mux(use_cache, r_valids && !IsKilledByBranch(io.rp(1).brupdate, r_uops), io.rp(1).req.valid && !IsKilledByBranch(io.rp(1).brupdate, io.rp(1).req.bits.uop) && !io.rp(1).req.bits.kill))
+  iresp_uop(0)(1) := Mux(use_cache, r_uops, io.rp(1).req.bits.uop)
+  iresp_uop(0)(1).br_mask := GetNewBrMask(io.rp(1).brupdate, Mux(use_cache, r_uops, io.rp(1).req.bits.uop))
+
+  iresp_valid(1)(0) := iresp_valid(0)(0) && !IsKilledByBranch(io.rp(0).brupdate, iresp_uop(0)(0)) && !io.rp(0).req.bits.kill
+  iresp_uop(1)(0) := iresp_uop(0)(0)
+  iresp_uop(1)(0).br_mask := GetNewBrMask(io.rp(0).brupdate, iresp_uop(0)(0))
+  iresp_valid(1)(1) := iresp_valid(0)(1) && !IsKilledByBranch(io.rp(1).brupdate, iresp_uop(0)(1)) && !io.rp(1).req.bits.kill
+  iresp_uop(1)(1) := iresp_uop(0)(1)
+  iresp_uop(1)(1).br_mask := GetNewBrMask(io.rp(1).brupdate, iresp_uop(0)(1))
+
+
+  val iresp_data = Reg(Vec(2, UInt(64.W)))
   iresp_data(0) := muxed(0)
-  iresp_valid(1) := Mux(p2_need_2cycles, false.B, Mux(use_cache, r_valids && !IsKilledByBranch(io.rp(1).brupdate, r_uops), io.rp(1).req.valid && !IsKilledByBranch(io.rp(1).brupdate, io.rp(1).req.bits.uop) && !io.rp(1).req.bits.kill))
-  iresp_uop(1) := Mux(use_cache, r_uops, io.rp(1).req.bits.uop)
-  iresp_uop(1).br_mask := GetNewBrMask(io.rp(1).brupdate, Mux(use_cache, r_uops, io.rp(1).req.bits.uop))
   iresp_data(1) := muxed(1)
 
   // handle outgoing (branch could still kill it)
   // consumer must also check for pipeline flushes (kills)
-  io.wp(0).iresp.valid    := iresp_valid(0)
-  io.wp(0).iresp.bits.uop := iresp_uop(0)
-  io.wp(0).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, iresp_uop(0))
+  io.wp(0).iresp.valid    := iresp_valid(1)(0)
+  io.wp(0).iresp.bits.uop := iresp_uop(1)(0)
+  io.wp(0).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(0).brupdate, iresp_uop(1)(0))
   io.wp(0).iresp.bits.data := iresp_data(0)
-  io.wp(1).iresp.valid    := iresp_valid(1)
-  io.wp(1).iresp.bits.uop := iresp_uop(1)
-  io.wp(1).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(1).brupdate, iresp_uop(1))
+  io.wp(1).iresp.valid    := iresp_valid(1)(1)
+  io.wp(1).iresp.bits.uop := iresp_uop(1)(1)
+  io.wp(1).iresp.bits.uop.br_mask := GetNewBrMask(io.rp(1).brupdate, iresp_uop(1)(1))
   io.wp(1).iresp.bits.data := iresp_data(1)
 
   for (o <- 0 to 1) {
     val alu = Module(new ALUUnit(isJmpUnit = false,
-                                 numStages = 1,
+                                 numStages = 2,
                                  dataWidth = xLen))
 
     alu.io.req.valid := (
@@ -382,7 +393,7 @@ class Mulv2ExeUnit(
     alu.io.brupdate := io.rp(o).brupdate
 
     // Bypassing only applies to ALU
-    io.bypass(o) := alu.io.bypass(0)
+    io.bypass(o) := alu.io.bypass
 
     // branch unit is embedded inside the ALU
     io.brinfo(o) := alu.io.brinfo

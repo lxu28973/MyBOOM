@@ -907,11 +907,11 @@ class BoomCore(implicit p: Parameters) extends BoomModule
           resp.bits.uop.dst_rtype === RT_FIX
 
         // Middle Wakeup (use first bypass port)
-        mid_wakeup.bits.uop := exe_units.mpapply(i).io.bypass(j).bits.uop
-        mid_wakeup.valid := exe_units.mpapply(i).io.bypass(j).valid &&
-          exe_units.mpapply(i).io.bypass(j).bits.uop.bypassable &&
-          exe_units.mpapply(i).io.bypass(j).bits.uop.dst_rtype === RT_FIX &&
-          exe_units.mpapply(i).io.bypass(j).bits.uop.ldst_val
+        mid_wakeup.bits.uop := exe_units.mpapply(i).io.bypass(0)(j).bits.uop
+        mid_wakeup.valid := exe_units.mpapply(i).io.bypass(0)(j).valid &&
+          exe_units.mpapply(i).io.bypass(0)(j).bits.uop.bypassable &&
+          exe_units.mpapply(i).io.bypass(0)(j).bits.uop.dst_rtype === RT_FIX &&
+          exe_units.mpapply(i).io.bypass(0)(j).bits.uop.ldst_val
 
         // Fast Wakeup (uses just-issued uops that have known latencies)
         fast_wakeup.bits.uop := iss_uops(exe_units.length + j)
@@ -1211,8 +1211,10 @@ class BoomCore(implicit p: Parameters) extends BoomModule
       }
       if (exe_unit.hasAlu) {
         for (i <- 0 until exe_unit.numWritePort) {
-          bypasses(bypass_idx) := exe_unit.io.bypass(i)
-          bypass_idx += 1
+          for (j <- 0 to 1) {
+            bypasses(bypass_idx) := exe_unit.io.bypass(j)(i)
+            bypass_idx += 1
+          }
         }
       }
     }
