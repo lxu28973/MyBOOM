@@ -330,7 +330,8 @@ class Mulv2ExeUnit(
   cache_rst_data := add_array.io.cache_out
 
   val add_out = WireDefault(add_array.io.out)
-  when(use_cache){
+  val use_cache_reg = RegNext(use_cache)
+  when(use_cache_reg){
     add_out(1) := add_array.io.out(1) + cache_rst_data
   }
   val muxed = Wire(Vec(2, UInt(64.W)))
