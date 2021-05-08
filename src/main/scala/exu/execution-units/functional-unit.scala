@@ -460,7 +460,7 @@ class ALUUnit(isJmpUnit: Boolean = false, numStages: Int = 1, dataWidth: Int)(im
   for (i <- 1 until numStages) {
     io.bypass(i).valid := r_val(i-1)
     io.bypass(i).bits.data := r_data(i-1)
-    io.bypass(i).bits.uop.pdst_spar := VecInit((0 until 4).map(i => (io.bypass(i).bits.data((i+1)*dataWidth/4 -1, i*dataWidth/4) === 0.U)))
+    io.bypass(i).bits.uop.pdst_spar := VecInit((0 until 4).map(j => (io.bypass(i).bits.data((j+1)*dataWidth/4 -1, j*dataWidth/4) === 0.U)))
   }
 
   // Exceptions
