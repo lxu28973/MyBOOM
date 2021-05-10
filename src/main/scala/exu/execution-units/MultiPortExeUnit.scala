@@ -297,11 +297,11 @@ class Mulv2ExeUnit(
 
   val in = mul_array.io.in
   val out = 0.U asTypeOf Vec(8, SInt(128.W))
-  val index_valid = WireDefault(Vec(8, false.B))
-  val p_index = WireDefault(Vec(8, 0.U(1.W)))
-  val i_index = WireDefault(Vec(8, 0.U(2.W)))
-  val j_index = WireDefault(Vec(8, 0.U(2.W)))
-  val shift = WireDefault(Vec(8, 0.U(3.W)))
+  val index_valid = WireDefault(0.U asTypeOf Vec(8, Bool()))
+  val p_index = WireDefault(0.U asTypeOf Vec(8, UInt(1.W)))
+  val i_index = WireDefault(0.U asTypeOf Vec(8, UInt(2.W)))
+  val j_index = WireDefault(0.U asTypeOf Vec(8, UInt(2.W)))
+  val shift = WireDefault(0.U asTypeOf Vec(8, UInt(3.W)))
   var mul_ind = 0.U(4.W)
 
   for (p <- 0 to 1) {
