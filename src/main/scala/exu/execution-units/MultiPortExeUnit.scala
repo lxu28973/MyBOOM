@@ -285,37 +285,14 @@ class Mulv2ExeUnit(
           need_mul := non_spar_table(p)(i)(j)
         }
         when(need_mul) {
-          if (i == 3){
-            rs_pairs.rs1_data := Cat(lhsSigned(p) && rs1_data(p)(dataWidth-1), rs1_data(p)(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
-          }
-          else if (i == 1){
-            when(is_mac(p)){
-              rs_pairs.rs1_data := Cat(lhsSigned(p) && rs1_data(p)(dataWidth-1), rs1_data(p)(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
-            }.otherwise {
-              rs_pairs.rs1_data := Cat(0.U(1.W), rs1_data(p)(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
-            }
-          }
-          else {
-            rs_pairs.rs1_data := Cat(0.U(1.W), rs1_data(p)(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
-          }
+          rs_pairs.rs1_data := Cat(lhsSigned(p) && rs1_data(p)(dataWidth - 1), rs1_data(p)(dataWidth / 4 * (3 + 1) - 1, dataWidth / 4 * 3)).asSInt
 
-          if (j == 3){
-            rs_pairs.rs2_data := Cat(rhsSigned(p) && rs2_data(p)(dataWidth-1), rs2_data(p)(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
-          }
-          else if (j == 1){
-            when(is_mac(p)){
-              rs_pairs.rs2_data := Cat(rhsSigned(p) && rs2_data(p)(dataWidth-1), rs2_data(p)(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
-            }.otherwise {
-              rs_pairs.rs2_data := Cat(0.U(1.W), rs2_data(p)(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
-            }
-          }
-          else {
-            rs_pairs.rs2_data := Cat(0.U(1.W), rs2_data(p)(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
-          }
+          rs_pairs.rs2_data := Cat(rhsSigned(p) && rs2_data(p)(dataWidth - 1), rs2_data(p)(dataWidth / 4 * (3 + 1) - 1, dataWidth / 4 * 3)).asSInt
+
           in(mul_ind) := rs_pairs
-          when(is_packed(p)){
-            out(mul_ind) := mul_array.io.out(mul_ind) << ((i%2 + j%2) * 16).U
-          }.otherwise{
+          when(is_packed(p)) {
+            out(mul_ind) := mul_array.io.out(mul_ind) << ((i % 2 + j % 2) * 16).U
+          }.otherwise {
             out(mul_ind) := mul_array.io.out(mul_ind) << ((i + j) * 16).U
           }
         }
