@@ -151,6 +151,7 @@ class Mulv2ExeUnit(
   val r_valids = RegNext(false.B)
   val r_uops   = Reg(new MicroOp)
 
+  val rs_pairs = Wire(Vec(2, Vec(4, Vec(4, new RsPair(dataWidth)))))
   val p1_need_mul = Mux(io.rp(0).req.valid && io.rp(0).req.bits.uop.fu_code_is(FU_MUL),
                         Mux(io.rp(0).req.bits.uop.uopc === uopMULAC, packed_need_mul(0), uop_prs1_exe_spar(0) * uop_prs2_exe_spar(0)),
                         0.U)
@@ -190,25 +191,22 @@ class Mulv2ExeUnit(
   val lhsSigned = Wire(Vec(2, Bool()))
   val rhsSigned = Wire(Vec(2, Bool()))
   val cmdHalf = Wire(Vec(2, Bool()))
-  val is_mac = Wire(Vec(2, Bool()))
-  val rs1_data = Wire(Vec(2, UInt(dataWidth.W)))
-  val rs2_data = Wire(Vec(2, UInt(dataWidth.W)))
-  
+
   for (o <- 0 to 1) {
     io.rp(o).req.ready := true.B
     val op_fcn   = WireDefault(io.rp(o).req.bits.uop.ctrl.op_fcn)
-    val rs1_data_ = WireDefault(io.rp(o).req.bits.rs1_data)
-    val rs2_data_ = WireDefault(io.rp(o).req.bits.rs2_data)
+    val rs1_data = WireDefault(io.rp(o).req.bits.rs1_data)
+    val rs2_data = WireDefault(io.rp(o).req.bits.rs2_data)
     val fcn_dw   = WireDefault(io.rp(o).req.bits.uop.ctrl.fcn_dw)
     if (o == 1) {
       when(use_cache){
         op_fcn := cache_op_fcn
-        rs1_data_ := cache_rs1_data
-        rs2_data_ := cache_rs2_data
+        rs1_data := cache_rs1_data
+        rs2_data := cache_rs2_data
         fcn_dw := r_uops.ctrl.fcn_dw
       }
     }
-    val is_mac_ = op_fcn === FN_MULAC
+    val is_mac = op_fcn === FN_MULAC
     val decode = List(
       FN_MUL    -> List(N, X, X),
       FN_MULH   -> List(Y, Y, Y),
@@ -219,16 +217,44 @@ class Mulv2ExeUnit(
       DecodeLogic(op_fcn, List(X, X, X), decode).map(_.asBool)
     val cmdHalf_ = (dataWidth > 32).B && fcn_dw === DW_32  // for MULW instruction
 
-    is_mac(o) := is_mac_
     cmdHi(o) := cmdHi_
     lhsSigned(o) := lhsSigned_
     rhsSigned(o) := rhsSigned_
     cmdHalf(o) := cmdHalf_
-    rs1_data(o) := rs1_data_
-    rs2_data(o) := rs2_data_
+
+    for (i <- 0 until 4) {
+      for (j <- 0 until 4) {
+        if (i == 3){
+          rs_pairs(o)(i)(j).rs1_data := Cat(lhsSigned_ && rs1_data(dataWidth-1), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+        }
+        else if (i == 1){
+          when(is_mac){
+            rs_pairs(o)(i)(j).rs1_data := Cat(lhsSigned_ && rs1_data(dataWidth-1), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+          }.otherwise {
+            rs_pairs(o)(i)(j).rs1_data := Cat(0.U(1.W), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+          }
+        }
+        else {
+          rs_pairs(o)(i)(j).rs1_data := Cat(0.U(1.W), rs1_data(dataWidth/4 * (i+1) - 1, dataWidth/4 * i)).asSInt
+        }
+
+        if (j == 3){
+          rs_pairs(o)(i)(j).rs2_data := Cat(rhsSigned_ && rs2_data(dataWidth-1), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+        }
+        else if (j == 1){
+          when(is_mac){
+            rs_pairs(o)(i)(j).rs2_data := Cat(rhsSigned_ && rs2_data(dataWidth-1), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+          }.otherwise {
+            rs_pairs(o)(i)(j).rs2_data := Cat(0.U(1.W), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+          }
+        }
+        else {
+          rs_pairs(o)(i)(j).rs2_data := Cat(0.U(1.W), rs2_data(dataWidth/4 * (j+1) - 1, dataWidth/4 * j)).asSInt
+        }
+      }
+    }
 
   }
-  
   val non_spar_table = Wire(Vec(2, Vec(4, Vec(4, Bool()))))
   val cache_non_spar_table_wire = Wire(Vec(2, Vec(4, Vec(4, Bool()))))
   val cache_non_spar_table = Reg(Vec(4, Vec(4, Bool())))
@@ -276,23 +302,16 @@ class Mulv2ExeUnit(
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
         val need_mul = Wire(Bool())
-        val rs_pairs = Wire(new RsPair(dataWidth))
-        rs_pairs.rs1_data := 0.S
-        rs_pairs.rs2_data := 0.S
         if (p == 1) {
           need_mul := Mux(use_cache, cache_non_spar_table(i)(j), non_spar_table(p)(i)(j))
         } else {
           need_mul := non_spar_table(p)(i)(j)
         }
         when(need_mul) {
-          rs_pairs.rs1_data := Cat(lhsSigned(p) && rs1_data(p)(dataWidth - 1), rs1_data(p)(dataWidth / 4 * (3 + 1) - 1, dataWidth / 4 * 3)).asSInt
-
-          rs_pairs.rs2_data := Cat(rhsSigned(p) && rs2_data(p)(dataWidth - 1), rs2_data(p)(dataWidth / 4 * (3 + 1) - 1, dataWidth / 4 * 3)).asSInt
-
-          in(mul_ind) := rs_pairs
-          when(is_packed(p)) {
-            out(mul_ind) := mul_array.io.out(mul_ind) << ((i % 2 + j % 2) * 16).U
-          }.otherwise {
+          in(mul_ind) := rs_pairs(p)(i)(j)
+          when(is_packed(p)){
+            out(mul_ind) := mul_array.io.out(mul_ind) << ((i%2 + j%2) * 16).U
+          }.otherwise{
             out(mul_ind) := mul_array.io.out(mul_ind) << ((i + j) * 16).U
           }
         }
