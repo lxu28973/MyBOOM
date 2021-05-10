@@ -277,6 +277,8 @@ class Mulv2ExeUnit(
       for (j <- 0 until 4) {
         val need_mul = Wire(Bool())
         val rs_pairs = Wire(new RsPair(dataWidth))
+        rs_pairs.rs1_data := 0.S
+        rs_pairs.rs2_data := 0.S
         if (p == 1) {
           need_mul := Mux(use_cache, cache_non_spar_table(i)(j), non_spar_table(p)(i)(j))
         } else {
