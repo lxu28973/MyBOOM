@@ -59,12 +59,51 @@ class RenameBusyTable(
   busy_table := busy_table_next
 
   val spar_table = RegInit(0.U asTypeOf Vec(numPregs, Vec(4, Bool())))
-  // Update sparsity flag
+  // update situation of spar === 1
+  val update_spar_1 = Wire(Vec(numWbPorts, Vec(4, Bool())))
   for (i <- 0 until numWbPorts) {
-    when(io.wb_valids(i)) {
-      spar_table(io.wb_pdsts(i)) := io.wb_spar(i)
+    (0 to 3).map(j => update_spar_1(i)(j) := io.wb_valids(i) & io.wb_spar(i)(j))
+  }
+
+  val spar_table_wb = Wire(Vec(4, UInt(numPregs.W)))
+  for (j <- 0 until 4) {
+    var spar_ = Fill(numPregs, update_spar_1(0)(j).asUInt) & UIntToOH(io.wb_pdsts(0))
+    for (i <- 1 until numWbPorts) {
+      spar_ = spar_ | (Fill(numPregs, update_spar_1(i)(j).asUInt) & UIntToOH(io.wb_pdsts(i)))
+    }
+    spar_table_wb(j) := spar_
+  }
+
+  val spar_table_next = WireDefault(0.U asTypeOf Vec(numPregs, Vec(4, Bool())))
+  // Update sparsity flag
+  for (i <- 0 until numPregs) {
+    for (j <- 0 until 4) {
+      spar_table_next(i)(j) := spar_table(i)(j) | spar_table_wb(j)(i)
     }
   }
+
+  // update situation of spar === 0
+  val update_spar_0 = Wire(Vec(numWbPorts, Vec(4, Bool())))
+  for (i <- 0 until numWbPorts) {
+    (0 to 3).map(j => update_spar_0(i)(j) := (!io.wb_valids(i)) | io.wb_spar(i)(j))
+  }
+
+  val spar_table_wb_0 = Wire(Vec(4, UInt(numPregs.W)))
+  for (j <- 0 until 4) {
+    var spar_ = Fill(numPregs, update_spar_0(0)(j).asUInt) | (~(UIntToOH(io.wb_pdsts(0))))
+    for (i <- 1 until numWbPorts) {
+      spar_ = spar_ & (Fill(numPregs, update_spar_0(i)(j).asUInt) | (~(UIntToOH(io.wb_pdsts(i)))))
+    }
+    spar_table_wb_0(j) := spar_
+  }
+
+  // Update sparsity flag
+  for (i <- 0 until numPregs) {
+    for (j <- 0 until 4) {
+      spar_table(i)(j) := spar_table_next(i)(j) & spar_table_wb_0(j)(i)
+    }
+  }
+
   spar_table(0) := VecInit(Seq.fill(4)(true.B))
 
   // Read the busy table.
