@@ -333,7 +333,7 @@ class Mulv2ExeUnit(
   for (ind <- 0 until 8) {
     when(index_valid(ind)) {
       in(ind) := rs_pairs(p_index(ind))(i_index(ind))(j_index(ind))
-      out(ind) := mul_array.io.out(mul_ind) << (shift(ind) << 4.U)
+      out(ind) := mul_array.io.out(ind) << (shift(ind) << 4.U)
     }
   }
 
