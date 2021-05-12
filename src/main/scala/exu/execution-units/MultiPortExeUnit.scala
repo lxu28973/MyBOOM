@@ -297,7 +297,13 @@ class Mulv2ExeUnit(
 
   val in = mul_array.io.in
   val out = 0.U asTypeOf Vec(8, SInt(128.W))
+  val index_valid = WireDefault(0.U asTypeOf Vec(8, Bool()))
+  val p_index = WireDefault(0.U asTypeOf Vec(8, UInt(1.W)))
+  val i_index = WireDefault(0.U asTypeOf Vec(8, UInt(2.W)))
+  val j_index = WireDefault(0.U asTypeOf Vec(8, UInt(2.W)))
+  val shift = WireDefault(0.U asTypeOf Vec(8, UInt(3.W)))
   var mul_ind = 0.U(4.W)
+
   for (p <- 0 to 1) {
     for (i <- 0 until 4) {
       for (j <- 0 until 4) {
@@ -308,11 +314,14 @@ class Mulv2ExeUnit(
           need_mul := non_spar_table(p)(i)(j)
         }
         when(need_mul) {
-          in(mul_ind) := rs_pairs(p)(i)(j)
+          index_valid(mul_ind) := true.B
+          p_index(mul_ind) := p.U
+          i_index(mul_ind) := i.U
+          j_index(mul_ind) := j.U
           when(is_packed(p)){
-            out(mul_ind) := mul_array.io.out(mul_ind) << ((i%2 + j%2) * 16).U
+            shift(mul_ind) := (i%2 + j%2).U
           }.otherwise{
-            out(mul_ind) := mul_array.io.out(mul_ind) << ((i + j) * 16).U
+            shift(mul_ind) := (i + j).U
           }
         }
         mul_ind = Mux(need_mul, mul_ind + 1.U, mul_ind)
@@ -320,6 +329,13 @@ class Mulv2ExeUnit(
     }
   }
   assert(mul_ind <= 8.U, "use too many muls")
+
+  for (ind <- 0 until 8) {
+    when(index_valid(ind)) {
+      in(ind) := rs_pairs(p_index(ind))(i_index(ind))(j_index(ind))
+      out(ind) := mul_array.io.out(ind) << (shift(ind) << 4.U)
+    }
+  }
 
   val add_array = Module(new AddArray)
 
