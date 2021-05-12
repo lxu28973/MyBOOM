@@ -335,6 +335,9 @@ class Mulv2ExeUnit(
     when(index_valid(ind)) {
       in(ind) := rs_pairs(p_index(ind))(i_index(ind))(j_index(ind))
       out(ind) := mul_array.io.out(ind) << (shift(ind) << 4.U)
+    }.otherwise {
+      in(ind).rs1_data := 0.S
+      in(ind).rs2_data := 0.S
     }
   }
 
