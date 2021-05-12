@@ -298,7 +298,7 @@ class Mulv2ExeUnit(
   val in = Reg(chiselTypeOf(mul_array.io.in))
   mul_array.io.in := in
   val out = 0.U asTypeOf Vec(8, SInt(128.W))
-  val index_valid = WireDefault(0.U asTypeOf Vec(8, Bool()))
+  val index_valid = RegNext(0.U asTypeOf Vec(8, Bool()))
   val p_index = WireDefault(0.U asTypeOf Vec(8, UInt(1.W)))
   val i_index = WireDefault(0.U asTypeOf Vec(8, UInt(2.W)))
   val j_index = WireDefault(0.U asTypeOf Vec(8, UInt(2.W)))
