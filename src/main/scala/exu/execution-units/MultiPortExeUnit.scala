@@ -295,7 +295,8 @@ class Mulv2ExeUnit(
     mul_array.io.in(i).rs2_data := 0.S
   }
 
-  val in = mul_array.io.in
+  val in = Reg(chiselTypeOf(mul_array.io.in))
+  mul_array.io.in := in
   val out = 0.U asTypeOf Vec(8, SInt(128.W))
   val index_valid = WireDefault(0.U asTypeOf Vec(8, Bool()))
   val p_index = WireDefault(0.U asTypeOf Vec(8, UInt(1.W)))
@@ -339,9 +340,8 @@ class Mulv2ExeUnit(
 
   val add_array = Module(new AddArray)
 
-  val out_reg = RegNext(out)
   val ctl_reg = RegNext(p1_need_mul)
-  add_array.io.in := out_reg
+  add_array.io.in := out
   add_array.io.ctl := ctl_reg
   cache_rst_data := add_array.io.cache_out
 
