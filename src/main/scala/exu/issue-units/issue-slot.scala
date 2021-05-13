@@ -185,12 +185,12 @@ class IssueSlot(val numWakeupPorts: Int, val iqType: BigInt)(implicit p: Paramet
     when (io.wakeup_ports(i).valid &&
          (io.wakeup_ports(i).bits.pdst === next_uop.prs1)) {
       p1 := true.B
-      slot_uop.prs1_spar := io.wakeup_ports(i).bits.pdst_spar
+      if (iqType == IQT_INT.litValue) slot_uop.prs1_spar := io.wakeup_ports(i).bits.pdst_spar
     }
     when (io.wakeup_ports(i).valid &&
          (io.wakeup_ports(i).bits.pdst === next_uop.prs2)) {
       p2 := true.B
-      slot_uop.prs2_spar := io.wakeup_ports(i).bits.pdst_spar
+      if (iqType == IQT_INT.litValue) slot_uop.prs2_spar := io.wakeup_ports(i).bits.pdst_spar
     }
     when (io.wakeup_ports(i).valid &&
          (io.wakeup_ports(i).bits.pdst === next_uop.prs3)) {
@@ -213,7 +213,7 @@ class IssueSlot(val numWakeupPorts: Int, val iqType: BigInt)(implicit p: Paramet
       next_uop.lrs1_rtype === RT_FIX) {
       p1 := true.B
       p1_poisoned := true.B
-      slot_uop.prs1_spar := 0.U(4.W).asBools()
+      if (iqType == IQT_INT.litValue) slot_uop.prs1_spar := 0.U(4.W).asBools()
       assert (!next_p1_poisoned)
     }
     when (io.spec_ld_wakeup(w).valid &&
@@ -221,7 +221,7 @@ class IssueSlot(val numWakeupPorts: Int, val iqType: BigInt)(implicit p: Paramet
       next_uop.lrs2_rtype === RT_FIX) {
       p2 := true.B
       p2_poisoned := true.B
-      slot_uop.prs2_spar := 0.U(4.W).asBools()
+      if (iqType == IQT_INT.litValue) slot_uop.prs2_spar := 0.U(4.W).asBools()
       assert (!next_p2_poisoned)
     }
   }
