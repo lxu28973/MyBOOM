@@ -107,54 +107,74 @@ class IssueUnitCollapsing(
     port_issued(w) = false.B
   }
 
-  val need_wait = RegNext(false.B)
-  val next_free_muls = RegNext(8.U)
-  val free_muls = Wire(Vec(issueWidth, UInt(4.W)))
-  free_muls(0) := next_free_muls
+  if (params.iqType == IQT_INT.litValue) {
+    val need_wait      = RegNext(false.B)
+    val next_free_muls = RegNext(8.U)
+    val free_muls      = Wire(Vec(issueWidth, UInt(4.W)))
+    free_muls(0) := next_free_muls
 
-  port_issued(issueWidth - 1) = need_wait // FIXME: when need_wait, disable the last issue port. need to be mul port
+    port_issued(issueWidth - 1) = need_wait // FIXME: when need_wait, disable the last issue port. need to be mul port
 
-  val iss_is_fu_mul = Wire(Vec(issueWidth, Bool()))
-  val iss_mul_need_2_cycle = Wire(Vec(issueWidth, Bool()))
-  val iss_need_muls = Wire(Vec(issueWidth, UInt(5.W)))
-  for (w <- 0 until issueWidth) {
-    iss_is_fu_mul(w) := false.B
-    iss_need_muls(w) := 0.U
-    iss_mul_need_2_cycle(w) := false.B
-    when(iss_is_fu_mul(w) && iss_mul_need_2_cycle(w)){
-      need_wait := true.B
-      next_free_muls := free_muls(w) * 2.U - iss_need_muls(w)
-    }
-  }
-  for (w <- 0 until(issueWidth - 1)) {
-    free_muls(w+1) := Mux(io.iss_valids(w) && iss_is_fu_mul(w), Mux(iss_mul_need_2_cycle(w), 0.U, free_muls(w) - iss_need_muls(w)), free_muls(w))
-  }
-
-  // TODO: Adding the lower priority of no sparsity
-  for (i <- 0 until numIssueSlots) {    // allow issue queue have internal vacant
-    issue_slots(i).grant := false.B
-    var uop_issued = false.B    // CAUTION: var, uop_issued = a | uop_issued, first uop_issued and second uop_issued are not the same
-    val need_muls = Mux(issue_slots(i).uop.uopc === uopMULAC, (0 to 1).map(n => (!issue_slots(i).uop.prs1_spar(2*n+0) +& !issue_slots(i).uop.prs1_spar(2*n+1))
-      * (!issue_slots(i).uop.prs2_spar(2*n+0) +& !issue_slots(i).uop.prs2_spar(2*n+1))).reduce(_+&_),
-                        PopCount(issue_slots(i).uop.prs1_spar.map(!_)) * PopCount(issue_slots(i).uop.prs2_spar.map(!_)))
-    val mul_need_2_cycle = need_muls > 8.U
-//    val no_spar = issue_slots(i).uop.prs1_spar.asUInt === 0.U && issue_slots(i).uop.prs2_spar.asUInt === 0.U
+    val iss_is_fu_mul        = Wire(Vec(issueWidth, Bool()))
+    val iss_mul_need_2_cycle = Wire(Vec(issueWidth, Bool()))
+    val iss_need_muls        = Wire(Vec(issueWidth, UInt(5.W)))
     for (w <- 0 until issueWidth) {
-      val is_fu_mul = issue_slots(i).uop.fu_code === FU_MUL
-      val fu_match = (issue_slots(i).uop.fu_code & io.fu_types(w)) =/= 0.U
-      val can_allocate = Mux(is_fu_mul,  (free_muls(w) >= need_muls || free_muls(w)(3)) && fu_match, fu_match)
-
-      when (requests(i) && !uop_issued && can_allocate && !port_issued(w)) {
-        issue_slots(i).grant := true.B
-        io.iss_valids(w) := true.B
-        io.iss_uops(w) := issue_slots(i).uop
-        iss_is_fu_mul(w) := is_fu_mul
-        iss_mul_need_2_cycle(w) := mul_need_2_cycle
-        iss_need_muls(w) := need_muls
+      iss_is_fu_mul(w) := false.B
+      iss_need_muls(w) := 0.U
+      iss_mul_need_2_cycle(w) := false.B
+      when(iss_is_fu_mul(w) && iss_mul_need_2_cycle(w)) {
+        need_wait := true.B
+        next_free_muls := free_muls(w) * 2.U - iss_need_muls(w)
       }
-      val was_port_issued_yet = port_issued(w)
-      port_issued(w) = (requests(i) && !uop_issued && can_allocate) | port_issued(w)
-      uop_issued = (requests(i) && can_allocate && !was_port_issued_yet) | uop_issued
+    }
+    for (w <- 0 until (issueWidth - 1)) {
+      free_muls(w + 1) := Mux(io.iss_valids(w) && iss_is_fu_mul(w), Mux(iss_mul_need_2_cycle(w), 0.U, free_muls(w) - iss_need_muls(w)), free_muls(w))
+    }
+
+    // TODO: Adding the lower priority of no sparsity
+    for (i <- 0 until numIssueSlots) { // allow issue queue have internal vacant
+      issue_slots(i).grant := false.B
+      var uop_issued       = false.B // CAUTION: var, uop_issued = a | uop_issued, first uop_issued and second uop_issued are not the same
+      val need_muls        = Mux(issue_slots(i).uop.uopc === uopMULAC, (0 to 1).map(n => (!issue_slots(i).uop.prs1_spar(2 * n + 0) +& !issue_slots(i).uop.prs1_spar(2 * n + 1))
+        * (!issue_slots(i).uop.prs2_spar(2 * n + 0) +& !issue_slots(i).uop.prs2_spar(2 * n + 1))).reduce(_ +& _),
+                                 PopCount(issue_slots(i).uop.prs1_spar.map(!_)) * PopCount(issue_slots(i).uop.prs2_spar.map(!_)))
+      val mul_need_2_cycle = need_muls > 8.U
+      //    val no_spar = issue_slots(i).uop.prs1_spar.asUInt === 0.U && issue_slots(i).uop.prs2_spar.asUInt === 0.U
+      for (w <- 0 until issueWidth) {
+        val is_fu_mul    = issue_slots(i).uop.fu_code === FU_MUL
+        val fu_match     = (issue_slots(i).uop.fu_code & io.fu_types(w)) =/= 0.U
+        val can_allocate = Mux(is_fu_mul, (free_muls(w) >= need_muls || free_muls(w)(3)) && fu_match, fu_match)
+
+        when(requests(i) && !uop_issued && can_allocate && !port_issued(w)) {
+          issue_slots(i).grant := true.B
+          io.iss_valids(w) := true.B
+          io.iss_uops(w) := issue_slots(i).uop
+          iss_is_fu_mul(w) := is_fu_mul
+          iss_mul_need_2_cycle(w) := mul_need_2_cycle
+          iss_need_muls(w) := need_muls
+        }
+        val was_port_issued_yet = port_issued(w)
+        port_issued(w) = (requests(i) && !uop_issued && can_allocate) | port_issued(w)
+        uop_issued = (requests(i) && can_allocate && !was_port_issued_yet) | uop_issued
+      }
+    }
+  } else {
+    for (i <- 0 until numIssueSlots) { // allow issue queue have internal vacant
+      issue_slots(i).grant := false.B
+      var uop_issued = false.B // CAUTION: var, uop_issued = a | uop_issued, first uop_issued and second uop_issued are not the same
+
+      for (w <- 0 until issueWidth) {
+        val can_allocate = (issue_slots(i).uop.fu_code & io.fu_types(w)) =/= 0.U
+
+        when(requests(i) && !uop_issued && can_allocate && !port_issued(w)) {
+          issue_slots(i).grant := true.B
+          io.iss_valids(w) := true.B
+          io.iss_uops(w) := issue_slots(i).uop
+        }
+        val was_port_issued_yet = port_issued(w)
+        port_issued(w) = (requests(i) && !uop_issued && can_allocate) | port_issued(w)
+        uop_issued = (requests(i) && can_allocate && !was_port_issued_yet) | uop_issued
+      }
     }
   }
 
