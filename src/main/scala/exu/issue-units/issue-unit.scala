@@ -123,7 +123,7 @@ abstract class IssueUnit(
     dis_uops(w).iw_p2_poisoned := false.B
     dis_uops(w).iw_state := s_valid_1
 
-    if (iqType == IQT_MEM.litValue || iqType == IQT_INT.litValue) {
+    if (iqType == IQT_MEM.litValue) {
       // For StoreAddrGen for Int, or AMOAddrGen, we go to addr gen state
       when ((io.dis_uops(w).bits.uopc === uopSTA && io.dis_uops(w).bits.lrs2_rtype === RT_FIX) ||
              io.dis_uops(w).bits.uopc === uopAMO_AG) {
@@ -133,6 +133,10 @@ abstract class IssueUnit(
         dis_uops(w).lrs2_rtype := RT_X
         dis_uops(w).prs2_busy  := false.B
       }
+      dis_uops(w).prs3_busy := false.B
+      dis_uops(w).prs1_spar := DontCare
+      dis_uops(w).prs2_spar := DontCare
+    } else if (iqType == IQT_INT.litValue){
       dis_uops(w).prs3_busy := false.B
     } else if (iqType == IQT_FP.litValue) {
       // FP "StoreAddrGen" is really storeDataGen, and rs1 is the integer address register
@@ -151,7 +155,7 @@ abstract class IssueUnit(
   //-------------------------------------------------------------
   // Issue Table
 
-  val slots = for (i <- 0 until numIssueSlots) yield { val slot = Module(new IssueSlot(numWakeupPorts)); slot }
+  val slots = for (i <- 0 until numIssueSlots) yield { val slot = Module(new IssueSlot(numWakeupPorts, iqType)); slot }
   val issue_slots = VecInit(slots.map(_.io))
 
   for (i <- 0 until numIssueSlots) {

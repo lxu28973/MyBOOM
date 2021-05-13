@@ -66,7 +66,7 @@ class IssueSlotIO(val numWakeupPorts: Int)(implicit p: Parameters) extends BoomB
  *
  * @param numWakeupPorts number of wakeup ports
  */
-class IssueSlot(val numWakeupPorts: Int)(implicit p: Parameters)
+class IssueSlot(val numWakeupPorts: Int, val iqType: BigInt)(implicit p: Parameters)
   extends BoomModule
   with IssueUnitConstants
 {
