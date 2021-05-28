@@ -89,7 +89,7 @@ class MulExeUnit(
     }
   }
 
-  val issuePart = Module(new MulIssuePart(numReadPort, dataWidth, 16))
+  val issuePart = Module(new MulIssuePart(numReadPort, dataWidth, 20))
 
   for (i <- 0 until numReadPort) {
     issuePart.io.in(i).valid := io.rp(i).req.valid && !delogic.io.zeroDetectOut(i).resZero && !IsKilledByBranch(io.rp(i).brupdate, io.rp(i).req.bits.uop)

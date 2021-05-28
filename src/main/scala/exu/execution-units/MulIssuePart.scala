@@ -124,7 +124,7 @@ class MulIssuePart(numReadPort: Int, dataWidth: Int, numIssueSlots: Int)(implici
     (!issue_slots(i).will_be_valid || issue_slots(i).clear) && !(issue_slots(i).in.valid))
   val num_available = PopCount(will_be_available)
   for (w <- 0 until numReadPort) {
-    io.in(w).ready := RegNext(num_available > w.U + numReadPort.U)
+    io.in(w).ready := RegNext(num_available > w.U + 2 * numReadPort.U)
   }
 
   //-------------------------------------------------------------
