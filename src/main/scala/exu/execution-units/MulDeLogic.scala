@@ -97,9 +97,9 @@ class MulDeLogic(numReadPort: Int, dataWidth: Int)(implicit p: Parameters) exten
   }
 
   // generate Tag
-  val cnt = RegInit(0.U(2.W))
+  val cnt = RegInit(0.U(3.W))
 
-  val a = VecInit(Seq.fill(numReadPort+1)(0.U(log2Ceil(numReadPort).W)))
+  val a = VecInit(Seq.fill(numReadPort+1)(0.U((log2Ceil(numReadPort)+1).W)))
   for (i <- 0 until numReadPort) {
     io.zeroDetectOut(i).tag := (cnt +& a(i)) % 3.U
     when(io.rp(i).req.valid & io.zeroDetectOut(i).pattern =/= 0.U) {
