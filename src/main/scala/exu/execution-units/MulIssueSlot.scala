@@ -168,7 +168,7 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   //-------------------------------------------------------------
   // Request Logic
   io.request := is_valid && !io.kill
-  io.reqs := slot_contain.req
+  io.reqs := Mux(IsKilledByBranch(io.brupdate, slot_contain.uop) || io.kill || !is_valid, 0.U, slot_contain.req)
 
   when (state === s_valid_1) {
     io.request := !io.kill
@@ -177,7 +177,7 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   }
 
   //assign outputs
-  io.valid := is_valid
+  io.valid := is_valid && !IsKilledByBranch(io.brupdate, slot_contain.uop) && !io.kill
   io.packet := slot_packets
 
 
