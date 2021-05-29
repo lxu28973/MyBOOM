@@ -113,6 +113,10 @@ class MulExeUnit(
   val uopArray = RegInit(VecInit(Seq.fill(3)(NullMicroOp)))
   val cmdhiArray = RegInit(0.U asTypeOf Vec(3, Bool()))
 
+  for (i <- 0 to 2)
+    for (j <- 0 to 3) {
+      validArray(i)(j) := validArray(i)(j).asBool && !IsKilledByBranch(io.rp(i).brupdate, uopArray(i)) && !io.rp(i).req.bits.kill
+    }
 
   // Add
   val add1 = Module(new ADD1)
