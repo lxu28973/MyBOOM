@@ -155,7 +155,7 @@ class MulIssuePart(numReadPort: Int, dataWidth: Int, numIssueSlots: Int)(implici
       for (w <- 0 until numReadPort) {
         when(requests(i)(j) && !uop_issued && !port_issued(w)) {
           issue_slots(i).grant(j) := 1.U
-          io.packet(w).valid := true.B
+          io.packet(w).valid := true.B && !IsKilledByBranch(io.brupdate, issue_slots(i).packet(j).uop) && !io.kill
           io.packet(w).bits := issue_slots(i).packet(j)
         }
         val was_port_issued_yet = port_issued(w)
