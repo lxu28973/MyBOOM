@@ -116,6 +116,7 @@ class MulIssueSlot()(implicit p: Parameters) extends BoomModule {
   def connectPacket(slot_packet: Packet, i: Int, j: Int, weight:Int) = {
     slot_packet.pattern := slot_contain.pattern
     slot_packet.uop := slot_contain.uop
+    slot_packet.uop.br_mask := GetNewBrMask(io.brupdate, slot_contain.uop)
     slot_packet.rs1_x := slot_contain.data(i)
     slot_packet.rs2_x := slot_contain.data(j)
     slot_packet.weight := weight.U
